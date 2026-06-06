@@ -2,46 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-type TokenResponse = {
-  access_token?: string;
-  error?: string;
-  error_description?: string;
-};
-
-type Account = {
-  account_id?: string;
-  display_name?: string;
-  account_type?: string;
-  currency?: string;
-  provider?: {
-    display_name?: string;
-    provider_id?: string;
-  };
-};
-
-type AccountsResponse = {
-  results?: Account[];
-  error?: string;
-  message?: string;
-  error_description?: string;
-  debug?: unknown;
-};
-
-type BalanceResult = {
-  available?: number;
-  current?: number;
-  currency?: string;
-  update_timestamp?: string;
-};
-
-type BalanceResponse = {
-  results?: BalanceResult[];
-  error?: string;
-  message?: string;
-  error_description?: string;
-  debug?: unknown;
-};
-
 type StoredBalance = {
   amount: number;
   currency: string;
@@ -54,6 +14,14 @@ type CallbackState = {
   kind: "loading" | "success" | "error";
   title: string;
   message: string;
+  debug?: unknown;
+};
+
+type CompleteBankLinkResponse = {
+  balance?: StoredBalance;
+  error?: string;
+  message?: string;
+  error_description?: string;
   debug?: unknown;
 };
 
@@ -94,22 +62,6 @@ async function postJson<T>(url: string, body: Record<string, string>) {
   return { data, ok: response.ok, status: response.status };
 }
 
-function summarizeAccounts(accounts?: Account[]) {
-  return accounts?.map((account, index) => ({
-    index,
-    account_id: account.account_id,
-    display_name: account.display_name,
-    account_type: account.account_type,
-    currency: account.currency,
-    provider: account.provider
-      ? {
-          display_name: account.provider.display_name,
-          provider_id: account.provider.provider_id,
-        }
-      : undefined,
-  }));
-}
-
 export default function CallbackPage() {
   const [state, setState] = useState<CallbackState>({
     kind: "loading",
@@ -129,6 +81,7 @@ export default function CallbackPage() {
     const run = async () => {
       const params = new URLSearchParams(window.location.search);
       const returnedCode = params.get("code");
+      const returnedState = params.get("state");
       const error = params.get("error");
       const errorDescription = params.get("error_description");
 
@@ -150,101 +103,43 @@ export default function CallbackPage() {
         return;
       }
 
+      if (!returnedState) {
+        setSafeState({
+          kind: "error",
+          title: "Security check missing",
+          message: "Try connecting your bank again so Penny Pig can verify the bank link.",
+        });
+        return;
+      }
+
       setSafeState({
         kind: "loading",
         title: "Opening the money jar",
         message: "Penny Pig is checking the first account now.",
       });
 
-      const tokenResult = await postJson<TokenResponse>("/api/exchange-code", {
+      const linkResult = await postJson<CompleteBankLinkResponse>("/api/complete-bank-link", {
         code: returnedCode,
+        state: returnedState,
       });
 
-      if (!tokenResult.ok || !tokenResult.data.access_token) {
-        setSafeState({
-          kind: "error",
-          title: "Could not connect",
-          message: getApiMessage(tokenResult.data, "The bank code could not be exchanged."),
-        });
-        return;
-      }
-
-      const accessToken = tokenResult.data.access_token;
-
-      const accountsResult = await postJson<AccountsResponse>("/api/accounts", {
-        accessToken,
-      });
-      const firstAccount = accountsResult.data.results?.[0];
-
-      if (!accountsResult.ok) {
-        setSafeState({
-          kind: "error",
-          title: "Could not load accounts",
-          message: `TrueLayer returned: ${getApiMessage(
-            accountsResult.data,
-            "TrueLayer could not return account data."
-          )}`,
-          debug: {
-            route: "/api/accounts",
-            status: accountsResult.status,
-            response: accountsResult.data,
-            accountSummaries: summarizeAccounts(accountsResult.data.results),
-          },
-        });
-        return;
-      }
-
-      if (!firstAccount?.account_id) {
-        setSafeState({
-          kind: "error",
-          title: "No account found",
-          message: "The bank link worked, but there was not an account to show yet.",
-          debug: {
-            route: "/api/accounts",
-            status: accountsResult.status,
-            response: accountsResult.data,
-            accountSummaries: summarizeAccounts(accountsResult.data.results),
-          },
-        });
-        return;
-      }
-
-      const balanceResult = await postJson<BalanceResponse>("/api/balance", {
-        accessToken,
-        accountId: firstAccount.account_id,
-      });
-      const firstBalance = balanceResult.data.results?.[0];
-      const amount = firstBalance?.available ?? firstBalance?.current;
-
-      if (!balanceResult.ok || typeof amount !== "number") {
+      if (!linkResult.ok || !linkResult.data.balance) {
         setSafeState({
           kind: "error",
           title: "Could not read the balance",
-          message: getApiMessage(balanceResult.data, "The account was found, but its balance was not ready."),
-          debug: {
-            route: "/api/balance",
-            status: balanceResult.status,
-            selectedAccount: {
-              account_id: firstAccount.account_id,
-              display_name: firstAccount.display_name,
-              account_type: firstAccount.account_type,
-            },
-            accountSummaries: summarizeAccounts(accountsResult.data.results),
-            response: balanceResult.data,
-          },
+          message: getApiMessage(linkResult.data, "Penny Pig could not finish checking the account."),
+          debug: linkResult.data.debug
+            ? {
+                route: "/api/complete-bank-link",
+                status: linkResult.status,
+                details: linkResult.data.debug,
+              }
+            : undefined,
         });
         return;
       }
 
-      const storedBalance: StoredBalance = {
-        amount,
-        currency: firstBalance?.currency ?? "GBP",
-        accountName: firstAccount.display_name ?? "First account",
-        updatedAt: firstBalance?.update_timestamp,
-        fetchedAt: new Date().toISOString(),
-      };
-
-      sessionStorage.setItem(storageKey, JSON.stringify(storedBalance));
+      sessionStorage.setItem(storageKey, JSON.stringify(linkResult.data.balance));
 
       setSafeState({
         kind: "success",

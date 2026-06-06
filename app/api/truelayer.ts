@@ -8,10 +8,6 @@ export function getTrueLayerDataApiBaseUrl() {
   return process.env.TRUELAYER_DATA_API_URL?.replace(/\/+$/, "");
 }
 
-export function getTokenHint(accessToken: string) {
-  return `${accessToken.slice(0, 8)}...`;
-}
-
 export function logTrueLayerDebug(event: string, payload: TrueLayerDebugPayload) {
   console.log(`[TrueLayer] ${event}`, payload);
 }

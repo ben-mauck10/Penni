@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { getTrueLayerAuthBaseUrl, logTrueLayerDebug } from "../truelayer";
 
+const stateCookieName = "penny-pig-auth-state";
+
 export async function GET() {
   try {
     const clientId = process.env.TRUELAYER_CLIENT_ID;
     const redirectUri = process.env.TRUELAYER_REDIRECT_URI;
     const authBase = getTrueLayerAuthBaseUrl();
     const providers = process.env.TRUELAYER_PROVIDERS;
+    const state = crypto.randomUUID();
 
     if (!clientId || !redirectUri || !authBase) {
       return NextResponse.json(
@@ -20,6 +23,7 @@ export async function GET() {
       client_id: clientId,
       redirect_uri: redirectUri,
       scope: "info accounts balance transactions",
+      state,
     });
 
     if (providers) {
@@ -33,9 +37,19 @@ export async function GET() {
       authBase,
       redirectUri,
       providers: providers ?? "(not set)",
+      hasState: true,
     });
 
-    return NextResponse.redirect(authUrl);
+    const response = NextResponse.redirect(authUrl);
+    response.cookies.set(stateCookieName, state, {
+      httpOnly: true,
+      maxAge: 10 * 60,
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    return response;
   } catch (error) {
     console.error("Failed to build TrueLayer auth link", error);
     return NextResponse.json(
