@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Penny Pig",
-  description: "A friendly bank balance card for kids.",
+  title: "Penni the Oinkbank",
+  description: "A parent-guided money habit companion for kids.",
 };
 
 export default function RootLayout({

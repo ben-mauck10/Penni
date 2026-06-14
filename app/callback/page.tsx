@@ -139,7 +139,9 @@ export default function CallbackPage() {
         return;
       }
 
-      sessionStorage.setItem(storageKey, JSON.stringify(linkResult.data.balance));
+      const storedBalance = JSON.stringify(linkResult.data.balance);
+      localStorage.setItem(storageKey, storedBalance);
+      sessionStorage.setItem(storageKey, storedBalance);
 
       setSafeState({
         kind: "success",
