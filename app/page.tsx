@@ -530,70 +530,87 @@ export default function HomePage() {
   };
 
   const jars = [
-    { name: "Spend", value: pots.spend, tone: "pink" },
-    { name: "Save", value: pots.save, tone: "green" },
-    { name: "Give", value: pots.give, tone: "gold" },
+    { name: "Spend", value: pots.spend, tone: "pink", helper: "money for now" },
+    { name: "Save", value: pots.save, tone: "green", helper: "money for goals" },
+    { name: "Give", value: pots.give, tone: "gold", helper: "money to share" },
   ];
 
   return (
-    <main className="device-page">
-      <section className="device-screen" aria-labelledby="screen-title">
-        <header className="device-header">
-          <div>
-            <p>Penni</p>
-            <h1 id="screen-title">Oinkbank</h1>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
-            <div style={{ display: "flex", gap: "4px" }}>
-              <Link className="device-settings-link" href="/history" aria-label="History">
-                ↕
-              </Link>
-              <Link className="device-settings-link" href="/settings" aria-label="Settings">
-                ⚙
-              </Link>
-            </div>
+    <main className="prototype-page">
+      <section className="prototype-shell" aria-labelledby="screen-title">
+        <header className="prototype-header">
+          <div className="prototype-brand">
             <Image
-              className="device-pig"
+              className="prototype-pig"
               src="/penni-oinkbank.png"
               alt=""
               width={1229}
               height={820}
               priority
             />
+            <div>
+              <p>Penni</p>
+              <h1 id="screen-title">Oinkbank</h1>
+            </div>
           </div>
+          <nav className="prototype-nav" aria-label="Prototype tools">
+            <Link href="/history">History</Link>
+            <Link href="/settings">Setup</Link>
+          </nav>
         </header>
 
-        <section className="balance-display" aria-live="polite">
+        <section className="prototype-balance" aria-live="polite">
           <span>{statusText}</span>
           <strong>{balanceText}</strong>
-          <p>{cheerMessage}</p>
+          <p>{balance ? cheerMessage : "Connect a bank account, or use phone test mode."}</p>
         </section>
 
         {pendingIncoming ? (
-          <SplitPrompt
-            total={pendingIncoming}
-            currency={currency}
-            initial={splitAmount(pendingIncoming, getStoredSplit())}
-            onConfirm={handleConfirmSplit}
-          />
+          <section className="prototype-panel prototype-panel--action">
+            <div className="prototype-panel__heading">
+              <span>Money in</span>
+              <strong>{formatMoney(pendingIncoming, currency)}</strong>
+            </div>
+            <SplitPrompt
+              total={pendingIncoming}
+              currency={currency}
+              initial={splitAmount(pendingIncoming, getStoredSplit())}
+              onConfirm={handleConfirmSplit}
+            />
+          </section>
         ) : (
           <>
-            <section className="mini-goals" aria-label="Savings goals">
-              <span className="mini-goals__label">Saving for</span>
-              <ul className="mini-goals__list">
+            <section className="prototype-pots" aria-label="Money pots">
+              {jars.map((jar) => (
+                <article className={`prototype-pot prototype-pot--${jar.tone}`} key={jar.name}>
+                  <div>
+                    <span>{jar.name}</span>
+                    <p>{jar.helper}</p>
+                  </div>
+                  <strong>{formatMoney(jar.value, currency)}</strong>
+                </article>
+              ))}
+            </section>
+
+            <section className="prototype-panel" aria-label="Savings goals">
+              <div className="prototype-panel__heading">
+                <span>Saving for</span>
+                <strong>{formatMoney(pots.save, currency)}</strong>
+              </div>
+              <ul className="prototype-goals">
                 {saveGoals.map((goal) => {
                   const allocated = goal.allocated ?? 0;
                   const progress = Math.max(0, Math.min(100, (allocated / goal.target) * 100));
                   return (
-                    <li key={goal.id} className="mini-goal-row">
-                      <div className="mini-goal-row__top">
-                        <span className="mini-goal-row__name">{goal.name}</span>
-                        <span className="mini-goal-row__target">
+                    <li key={goal.id}>
+                      <div className="prototype-goal-row">
+                        <span>{goal.name}</span>
+                        <strong>
                           {formatMoney(allocated, currency)} / {formatMoney(goal.target, currency)}
-                        </span>
+                        </strong>
                       </div>
                       <div
-                        className="mini-progress"
+                        className="prototype-progress"
                         role="progressbar"
                         aria-label={`${goal.name} savings progress`}
                         aria-valuemin={0}
@@ -608,37 +625,35 @@ export default function HomePage() {
               </ul>
             </section>
 
-            <section className="mini-jars" aria-label="Money jars">
-              {jars.map((jar) => (
-                <article className={`mini-jar mini-jar--${jar.tone}`} key={jar.name}>
-                  <span>{jar.name}</span>
-                  <strong>{formatMoney(jar.value, currency)}</strong>
-                </article>
-              ))}
-            </section>
-
-            <section className="parent-nudge" aria-label="Penni plan prompt">
-              <span>{pendingOutgoing ? "Plan update" : "Penni plan"}</span>
-              <p>{nudgeText}</p>
-            </section>
-
             {pendingOutgoing ? (
-              <div className="device-action-group" aria-label="Choose pot used for spending">
-                {POT_META.map((pot) => (
-                  <button
-                    className={`device-action device-action--${pot.tone}`}
-                    key={pot.key}
-                    type="button"
-                    onClick={() => handleSpendFromPot(pot.key)}
-                  >
-                    {pot.label}
-                  </button>
-                ))}
-              </div>
+              <section className="prototype-panel prototype-panel--action">
+                <div className="prototype-panel__heading">
+                  <span>Money spent</span>
+                  <strong>{formatMoney(pendingOutgoing, currency)}</strong>
+                </div>
+                <p>{nudgeText}</p>
+                <div className="prototype-choice-grid" aria-label="Choose pot used for spending">
+                  {POT_META.map((pot) => (
+                    <button
+                      className={`prototype-button prototype-button--${pot.tone}`}
+                      key={pot.key}
+                      type="button"
+                      onClick={() => handleSpendFromPot(pot.key)}
+                    >
+                      {pot.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
             ) : (
-              <a className="device-action" href="/api/auth-link">
-                {balance ? "Refresh" : "Connect bank"}
-              </a>
+              <section className="prototype-actions" aria-label="Bank actions">
+                <a className="prototype-button prototype-button--primary" href="/api/auth-link">
+                  {balance ? "Refresh bank" : "Connect bank"}
+                </a>
+                <Link className="prototype-button prototype-button--secondary" href="/settings">
+                  Parent setup
+                </Link>
+              </section>
             )}
           </>
         )}
