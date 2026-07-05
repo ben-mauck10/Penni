@@ -43,6 +43,17 @@ type BalanceResponse = {
 
 const stateCookieName = "penny-pig-auth-state";
 
+function chooseDisplayBalance(balance?: BalanceResult) {
+  const current = balance?.current;
+  const available = balance?.available;
+
+  if (typeof current === "number" && typeof available === "number") {
+    return available <= current ? available : current;
+  }
+
+  return current ?? available;
+}
+
 function summarizeAccounts(accounts?: Account[]) {
   return accounts?.map((account, index) => ({
     index,
@@ -208,7 +219,7 @@ export async function POST(req: NextRequest) {
     );
     const balanceData = (await readJson(balanceResponse)) as BalanceResponse | null;
     const firstBalance = balanceData?.results?.[0];
-    const amount = firstBalance?.current ?? firstBalance?.available;
+    const amount = chooseDisplayBalance(firstBalance);
 
     logTrueLayerDebug("complete-bank-link:balance", {
       dataApiBase,

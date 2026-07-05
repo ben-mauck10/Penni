@@ -2244,12 +2244,14 @@ a {
 .prototype-page {
   display: grid;
   min-height: 100dvh;
+  overflow: hidden;
   place-items: center;
   padding: 8px;
 }
 
 .prototype-shell {
-  width: min(100%, 760px, calc((100dvh - 16px) * 1.775));
+  width: min(calc(100vw - 16px), 760px, calc((100dvh - 16px) * 1.775));
+  max-height: calc(100dvh - 16px);
   min-height: 0;
   aspect-ratio: 568 / 320;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.04fr);
@@ -2309,6 +2311,7 @@ a {
 
 .prototype-balance strong {
   font-size: clamp(2.8rem, 9.2vw, 4.6rem);
+  white-space: nowrap;
 }
 
 .prototype-balance p,
@@ -2469,5 +2472,120 @@ a {
   .prototype-button {
     min-height: 32px;
     font-size: 0.68rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .prototype-page {
+    padding: 6px;
+  }
+
+  .prototype-shell {
+    width: min(calc(100vw - 12px), calc((100dvh - 12px) * 1.775));
+    max-height: calc(100dvh - 12px);
+    gap: 5px;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    grid-template-rows: 30px minmax(0, 1fr) 54px 32px;
+    padding: 6px;
+  }
+
+  .prototype-pig {
+    width: 28px;
+  }
+
+  .prototype-brand {
+    gap: 6px;
+  }
+
+  .prototype-brand p,
+  .prototype-nav a,
+  .prototype-balance span,
+  .prototype-pot span,
+  .prototype-panel__heading span,
+  .prototype-goal-row span {
+    font-size: 0.52rem;
+  }
+
+  .prototype-brand h1 {
+    font-size: 0.84rem;
+  }
+
+  .prototype-nav {
+    gap: 4px;
+  }
+
+  .prototype-nav a {
+    min-height: 24px;
+    padding: 0 6px;
+  }
+
+  .prototype-balance {
+    gap: 3px;
+    padding: 8px;
+  }
+
+  .prototype-balance strong {
+    font-size: clamp(1.8rem, 5.2vw, 2.8rem);
+    line-height: 0.9;
+  }
+
+  .prototype-balance p {
+    font-size: 0.52rem;
+  }
+
+  .prototype-pots {
+    gap: 5px;
+  }
+
+  .prototype-pot {
+    gap: 4px;
+    padding: 6px;
+  }
+
+  .prototype-pot p {
+    display: none;
+  }
+
+  .prototype-pot strong {
+    font-size: clamp(0.72rem, 2.2vw, 1rem);
+  }
+
+  .prototype-panel {
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .prototype-panel p {
+    font-size: 0.56rem;
+  }
+
+  .prototype-panel__heading strong {
+    font-size: 0.74rem;
+  }
+
+  .prototype-goals {
+    gap: 4px;
+  }
+
+  .prototype-goals li {
+    gap: 4px;
+  }
+
+  .prototype-goal-row strong {
+    font-size: 0.52rem;
+  }
+
+  .prototype-progress {
+    height: 6px;
+  }
+
+  .prototype-actions,
+  .prototype-choice-grid {
+    gap: 5px;
+  }
+
+  .prototype-button {
+    min-height: 30px;
+    font-size: 0.62rem;
   }
 }
