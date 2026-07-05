@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
     );
     const balanceData = (await readJson(balanceResponse)) as BalanceResponse | null;
     const firstBalance = balanceData?.results?.[0];
-    const amount = firstBalance?.available ?? firstBalance?.current;
+    const amount = firstBalance?.current ?? firstBalance?.available;
 
     logTrueLayerDebug("complete-bank-link:balance", {
       dataApiBase,
