@@ -2098,7 +2098,13 @@ a {
 }
 
 .prototype-pot strong {
-  overflow-wrap: anywhere;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: keep-all;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
   font-size: 1.35rem;
 }
 
@@ -2347,7 +2353,7 @@ a {
 }
 
 .prototype-pot strong {
-  font-size: clamp(0.95rem, 2.6vw, 1.24rem);
+  font-size: clamp(0.78rem, 2.1vw, 1.02rem);
 }
 
 .prototype-panel {
@@ -2547,7 +2553,7 @@ a {
   }
 
   .prototype-pot strong {
-    font-size: clamp(0.72rem, 2.2vw, 1rem);
+    font-size: clamp(0.64rem, 1.8vw, 0.82rem);
   }
 
   .prototype-panel {
