@@ -554,6 +554,7 @@ export default function HomePage() {
             </div>
           </div>
           <nav className="prototype-nav" aria-label="Prototype tools">
+            <Link href="/display">Display</Link>
             <Link href="/history">History</Link>
             <Link href="/settings">Setup</Link>
           </nav>

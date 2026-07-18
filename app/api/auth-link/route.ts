@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getTrueLayerAuthBaseUrl, logTrueLayerDebug } from "../truelayer";
+import { getTrueLayerAuthBaseUrl, getTrueLayerRedirectUri, logTrueLayerDebug } from "../truelayer";
 
 const stateCookieName = "penny-pig-auth-state";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const clientId = process.env.TRUELAYER_CLIENT_ID;
-    const redirectUri = process.env.TRUELAYER_REDIRECT_URI;
+    const redirectUri = getTrueLayerRedirectUri(new URL(req.url).origin);
     const authBase = getTrueLayerAuthBaseUrl();
     const providers = process.env.TRUELAYER_PROVIDERS;
     const state = crypto.randomUUID();

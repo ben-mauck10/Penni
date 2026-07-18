@@ -27,7 +27,7 @@ export default function PhoneTestPage() {
     localStorage.setItem(balanceStorageKey, JSON.stringify(getDemoBalance()));
     localStorage.removeItem(planStorageKey);
     localStorage.removeItem(historyStorageKey);
-    window.location.replace("/");
+    window.location.replace("/display");
   }, []);
 
   return (

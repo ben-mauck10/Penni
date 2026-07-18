@@ -8,6 +8,10 @@ export function getTrueLayerDataApiBaseUrl() {
   return process.env.TRUELAYER_DATA_API_URL?.replace(/\/+$/, "");
 }
 
+export function getTrueLayerRedirectUri(origin: string) {
+  return process.env.TRUELAYER_REDIRECT_URI?.trim() || `${origin.replace(/\/+$/, "")}/callback`;
+}
+
 export function logTrueLayerDebug(event: string, payload: TrueLayerDebugPayload) {
   console.log(`[TrueLayer] ${event}`, payload);
 }

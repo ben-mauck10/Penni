@@ -16,6 +16,14 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Android display mode
+
+The dedicated always-on phone view lives at `/display`. On an Android phone, open the deployed site in Chrome, choose **Add to Home screen**, then launch the installed Penni app icon. The PWA manifest starts in landscape display mode at `/display`.
+
+For a local demo balance on the phone, open `/phone-test?balance=86.42`; it seeds that device's local storage and then opens `/display`.
+
+Chrome's screen Wake Lock API is available from the display screen when the site is served from HTTPS or localhost. A phone opening `http://192.168.x.x:3000` is not a secure context, so the button will show `Needs HTTPS`. If the old phone does not support Wake Lock, use Android's display timeout or developer stay-awake setting while it is plugged in.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
@@ -32,5 +40,22 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+For the Android display, Vercel Hobby is enough to start. Add these environment variables in the Vercel project settings:
+
+```bash
+TRUELAYER_CLIENT_ID=...
+TRUELAYER_CLIENT_SECRET=...
+TRUELAYER_AUTH_URL=https://auth.truelayer.com
+TRUELAYER_DATA_API_URL=https://api.truelayer.com
+```
+
+Then add the deployed callback URL in TrueLayer Console as an exact registered redirect URI:
+
+```text
+https://your-vercel-project.vercel.app/callback
+```
+
+`TRUELAYER_REDIRECT_URI` is optional on Vercel; if it is not set, the app uses the current deployment origin plus `/callback`. Set it only when you want to force one canonical production URL.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

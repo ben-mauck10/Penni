@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getTrueLayerAuthBaseUrl,
   getTrueLayerDataApiBaseUrl,
+  getTrueLayerRedirectUri,
   getUpstreamMessage,
   logTrueLayerDebug,
 } from "../truelayer";
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest) {
 
     const clientId = process.env.TRUELAYER_CLIENT_ID;
     const clientSecret = process.env.TRUELAYER_CLIENT_SECRET;
-    const redirectUri = process.env.TRUELAYER_REDIRECT_URI;
+    const redirectUri = getTrueLayerRedirectUri(req.nextUrl.origin);
     const authBase = getTrueLayerAuthBaseUrl();
     const dataApiBase = getTrueLayerDataApiBaseUrl();
 
