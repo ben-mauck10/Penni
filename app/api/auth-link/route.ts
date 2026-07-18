@@ -22,7 +22,7 @@ export async function GET(req: Request) {
       response_type: "code",
       client_id: clientId,
       redirect_uri: redirectUri,
-      scope: "info accounts balance transactions",
+      scope: "info accounts balance transactions offline_access",
       state,
     });
 

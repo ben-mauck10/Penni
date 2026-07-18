@@ -298,6 +298,7 @@ a {
 
 /* Dedicated Android display mode */
 .display-page {
+  position: relative;
   display: grid;
   min-height: 100dvh;
   place-items: center;
@@ -305,6 +306,34 @@ a {
   padding: 8px;
   background: #0f1c33;
   color: var(--foreground);
+  touch-action: pan-y;
+}
+
+.display-refresh-cue {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  color: var(--foreground);
+  font-size: 0.78rem;
+  font-weight: 900;
+  opacity: 0.92;
+  pointer-events: none;
+  transition: transform 0.18s ease;
+  translate: -50% 0;
+}
+
+.display-refresh-cue--ready {
+  background: var(--soft-green);
+  color: var(--leaf-dark);
 }
 
 .display-screen {
@@ -511,6 +540,10 @@ a {
   cursor: pointer;
 }
 
+.display-button--secondary {
+  background: var(--sky);
+}
+
 .display-button:disabled {
   background: #e9eef3;
   color: #536079;
@@ -603,9 +636,16 @@ a {
 
   .display-button,
   .display-link {
-    min-width: 78px;
+    min-width: 70px;
     padding: 0 8px;
-    font-size: 0.68rem;
+    font-size: 0.62rem;
+  }
+
+  .display-refresh-cue {
+    top: 5px;
+    min-height: 26px;
+    padding: 0 10px;
+    font-size: 0.62rem;
   }
 }
 

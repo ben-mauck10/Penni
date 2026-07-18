@@ -24,6 +24,8 @@ For a local demo balance on the phone, open `/phone-test?balance=86.42`; it seed
 
 Chrome's screen Wake Lock API is available from the display screen when the site is served from HTTPS or localhost. A phone opening `http://192.168.x.x:3000` is not a secure context, so the button will show `Needs HTTPS`. If the old phone does not support Wake Lock, use Android's display timeout or developer stay-awake setting while it is plugged in.
 
+The display tries to refresh the bank balance every 5 minutes and also supports pull/swipe-down refresh. This uses TrueLayer `offline_access` and stores the refresh token in a secure HTTP-only browser cookie for this prototype. For multi-device or always-server-side refresh, move the token into a database-backed account record.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

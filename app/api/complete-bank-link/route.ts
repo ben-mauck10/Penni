@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  type TokenResponse,
+  fetchTrueLayerDisplayBalance,
   getTrueLayerAuthBaseUrl,
   getTrueLayerDataApiBaseUrl,
   getTrueLayerRedirectUri,
   getUpstreamMessage,
   logTrueLayerDebug,
+  readJson,
 } from "../truelayer";
 
 type CompleteBankLinkBody = {
@@ -12,73 +15,13 @@ type CompleteBankLinkBody = {
   state?: unknown;
 };
 
-type TokenResponse = {
-  access_token?: unknown;
-};
-
-type Account = {
-  account_id?: string;
-  display_name?: string;
-  account_type?: string;
-  currency?: string;
-  provider?: {
-    display_name?: string;
-    provider_id?: string;
-  };
-};
-
-type AccountsResponse = {
-  results?: Account[];
-};
-
-type BalanceResult = {
-  available?: number;
-  current?: number;
-  currency?: string;
-  update_timestamp?: string;
-};
-
-type BalanceResponse = {
-  results?: BalanceResult[];
-};
-
 const stateCookieName = "penny-pig-auth-state";
-
-function chooseDisplayBalance(balance?: BalanceResult) {
-  const current = balance?.current;
-  const available = balance?.available;
-
-  if (typeof current === "number" && typeof available === "number") {
-    return available <= current ? available : current;
-  }
-
-  return current ?? available;
-}
-
-function summarizeAccounts(accounts?: Account[]) {
-  return accounts?.map((account, index) => ({
-    index,
-    account_id: account.account_id,
-    display_name: account.display_name,
-    account_type: account.account_type,
-    currency: account.currency,
-    provider: account.provider
-      ? {
-          display_name: account.provider.display_name,
-          provider_id: account.provider.provider_id,
-        }
-      : undefined,
-  }));
-}
+const refreshCookieName = "penny-pig-refresh-token";
 
 function jsonWithClearedState(body: unknown, status: number) {
   const response = NextResponse.json(body, { status });
   response.cookies.delete(stateCookieName);
   return response;
-}
-
-async function readJson(response: Response) {
-  return response.json().catch(() => null) as Promise<unknown>;
 }
 
 export async function POST(req: NextRequest) {
@@ -132,6 +75,7 @@ export async function POST(req: NextRequest) {
     });
     const tokenData = (await readJson(tokenResponse)) as TokenResponse | null;
     const accessToken = tokenData?.access_token;
+    const refreshToken = tokenData?.refresh_token;
 
     logTrueLayerDebug("complete-bank-link:token-exchange", {
       authBase,
@@ -153,127 +97,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const accountsResponse = await fetch(`${dataApiBase}/data/v1/accounts`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-      cache: "no-store",
-    });
-    const accountsData = (await readJson(accountsResponse)) as AccountsResponse | null;
-    const firstAccount = accountsData?.results?.[0];
+    const balanceResult = await fetchTrueLayerDisplayBalance(accessToken, dataApiBase);
 
-    logTrueLayerDebug("complete-bank-link:accounts", {
-      dataApiBase,
-      status: accountsResponse.status,
-      ok: accountsResponse.ok,
-    });
-
-    if (!accountsData) {
-      return jsonWithClearedState(
-        {
-          error: "TrueLayer returned an unreadable accounts response",
-          debug: {
-            route: "accounts",
-            status: accountsResponse.status,
-          },
-        },
-        502
-      );
+    if (!balanceResult.ok) {
+      return jsonWithClearedState(balanceResult.body, balanceResult.status);
     }
 
-    if (!accountsResponse.ok) {
-      return jsonWithClearedState(
-        {
-          error: getUpstreamMessage(accountsData, "TrueLayer could not fetch accounts"),
-          debug: {
-            route: "accounts",
-            status: accountsResponse.status,
-            accountSummaries: summarizeAccounts(accountsData.results),
-          },
-        },
-        accountsResponse.status
-      );
-    }
-
-    if (!firstAccount?.account_id) {
-      return jsonWithClearedState(
-        {
-          error: "The bank link worked, but there was not an account to show yet.",
-          debug: {
-            route: "accounts",
-            status: accountsResponse.status,
-            accountSummaries: summarizeAccounts(accountsData.results),
-          },
-        },
-        404
-      );
-    }
-
-    const balanceResponse = await fetch(
-      `${dataApiBase}/data/v1/accounts/${encodeURIComponent(firstAccount.account_id)}/balance`,
+    const response = jsonWithClearedState(
       {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        cache: "no-store",
-      }
-    );
-    const balanceData = (await readJson(balanceResponse)) as BalanceResponse | null;
-    const firstBalance = balanceData?.results?.[0];
-    const amount = chooseDisplayBalance(firstBalance);
-
-    logTrueLayerDebug("complete-bank-link:balance", {
-      dataApiBase,
-      status: balanceResponse.status,
-      ok: balanceResponse.ok,
-      accountId: firstAccount.account_id,
-    });
-
-    if (!balanceData) {
-      return jsonWithClearedState(
-        {
-          error: "TrueLayer returned an unreadable balance response",
-          debug: {
-            route: "balance",
-            status: balanceResponse.status,
-            accountId: firstAccount.account_id,
-          },
-        },
-        502
-      );
-    }
-
-    if (!balanceResponse.ok || typeof amount !== "number") {
-      return jsonWithClearedState(
-        {
-          error: getUpstreamMessage(balanceData, "The account was found, but its balance was not ready."),
-          debug: {
-            route: "balance",
-            status: balanceResponse.status,
-            selectedAccount: {
-              account_id: firstAccount.account_id,
-              display_name: firstAccount.display_name,
-              account_type: firstAccount.account_type,
-            },
-            accountSummaries: summarizeAccounts(accountsData.results),
-          },
-        },
-        balanceResponse.status
-      );
-    }
-
-    return jsonWithClearedState(
-      {
-        balance: {
-          amount,
-          currency: firstBalance?.currency ?? "GBP",
-          accountName: firstAccount.display_name ?? "First account",
-          updatedAt: firstBalance?.update_timestamp,
-          fetchedAt: new Date().toISOString(),
-        },
+        balance: balanceResult.balance,
       },
       200
     );
+
+    if (typeof refreshToken === "string" && refreshToken.trim()) {
+      response.cookies.set(refreshCookieName, refreshToken, {
+        httpOnly: true,
+        maxAge: 60 * 60 * 24 * 80,
+        path: "/",
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+      });
+    }
+
+    return response;
   } catch (error) {
     console.error("Failed to complete TrueLayer bank link", error);
     return jsonWithClearedState(
