@@ -3,32 +3,22 @@
 import Image from "next/image";
 import Link from "next/link";
 import { type TouchEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  formatLastChecked,
+  formatMoney,
+  roundMoney,
+} from "../../lib/money";
+import {
+  BALANCE_UPDATED_EVENT,
+  KEYS,
+  dispatchBalanceUpdated,
+  parseStoredBalance,
+  parseStoredPlan,
+  writeBalance,
+} from "../../lib/storage";
+import type { PenniPlan, StoredBalance } from "../../lib/types";
 
-type StoredBalance = {
-  amount: number;
-  currency: string;
-  accountName: string;
-  updatedAt?: string;
-  fetchedAt: string;
-};
-
-type SaveGoal = {
-  id: string;
-  name: string;
-  target: number;
-  allocated?: number;
-};
-
-type PenniPlan = {
-  currency: string;
-  lastBalanceAmount: number;
-  pots: {
-    spend: number;
-    save: number;
-    give: number;
-  };
-  saveGoals: SaveGoal[];
-};
+// ── Types ─────────────────────────────────────────────────────
 
 type WakeLockSentinel = {
   released: boolean;
@@ -37,139 +27,49 @@ type WakeLockSentinel = {
 };
 
 type WakeLockNavigator = Navigator & {
-  wakeLock?: {
-    request: (type: "screen") => Promise<WakeLockSentinel>;
-  };
+  wakeLock?: { request: (type: "screen") => Promise<WakeLockSentinel> };
 };
 
 type WakeLockState = "unsupported" | "insecure" | "available" | "active" | "blocked";
 type RefreshState = "idle" | "refreshing" | "success" | "needs-connection" | "error";
+
 type RefreshBankResponse = {
   balance?: StoredBalance;
   error?: string;
 };
 
-const balanceStorageKey = "penny-pig-balance";
-const planStorageKey = "penni-plan";
-const balanceUpdatedEvent = "penni-balance-updated";
-const autoRefreshMs = 5 * 60 * 1000;
-const defaultSaveGoals: SaveGoal[] = [{ id: "default", name: "Lego Set", target: 150 }];
+// ── Constants ─────────────────────────────────────────────────
 
-function roundMoney(amount: number) {
-  return Math.round(amount * 100) / 100;
-}
+const DEFAULT_SAVE_GOALS = [{ id: "default", name: "Lego Set", target: 150, allocated: 0 }];
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
-function formatMoney(amount: number, currency: string) {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency,
-    }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
-
-function parseStoredBalance(stored: string | null) {
-  try {
-    if (!stored) {
-      return null;
-    }
-
-    const parsed = JSON.parse(stored) as Partial<StoredBalance>;
-
-    if (typeof parsed.amount !== "number" || !parsed.currency) {
-      return null;
-    }
-
-    return {
-      amount: parsed.amount,
-      currency: parsed.currency,
-      accountName: parsed.accountName ?? "First account",
-      updatedAt: parsed.updatedAt,
-      fetchedAt: parsed.fetchedAt ?? new Date().toISOString(),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function parseStoredPlan(stored: string | null) {
-  try {
-    if (!stored) {
-      return null;
-    }
-
-    const parsed = JSON.parse(stored) as Partial<PenniPlan>;
-
-    if (
-      !parsed.currency ||
-      typeof parsed.lastBalanceAmount !== "number" ||
-      typeof parsed.pots?.spend !== "number" ||
-      typeof parsed.pots.save !== "number" ||
-      typeof parsed.pots.give !== "number"
-    ) {
-      return null;
-    }
-
-    const saveGoals =
-      Array.isArray(parsed.saveGoals) && parsed.saveGoals.length > 0
-        ? parsed.saveGoals.filter(
-            (goal) => goal && typeof goal.name === "string" && typeof goal.target === "number"
-          )
-        : defaultSaveGoals;
-
-    return {
-      currency: parsed.currency,
-      lastBalanceAmount: parsed.lastBalanceAmount,
-      pots: parsed.pots,
-      saveGoals,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function formatLastChecked(dateText?: string) {
-  if (!dateText) {
-    return "Waiting for bank";
-  }
-
-  const date = new Date(dateText);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Linked";
-  }
-
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
+// ── Hooks ─────────────────────────────────────────────────────
 
 function useDisplayData() {
-  const [snapshot, setSnapshot] = useState<{ balance: StoredBalance | null; plan: PenniPlan | null }>(() => ({
-    balance: null,
-    plan: null,
-  }));
+  const [snapshot, setSnapshot] = useState<{
+    balance: StoredBalance | null;
+    plan: PenniPlan | null;
+  }>({ balance: null, plan: null });
 
   useEffect(() => {
     const read = () => {
       setSnapshot({
-        balance: parseStoredBalance(localStorage.getItem(balanceStorageKey)),
-        plan: parseStoredPlan(localStorage.getItem(planStorageKey)),
+        balance: parseStoredBalance(
+          localStorage.getItem(KEYS.balance) ?? sessionStorage.getItem(KEYS.balance)
+        ),
+        plan: parseStoredPlan(localStorage.getItem(KEYS.plan)),
       });
     };
 
     read();
-    const interval = window.setInterval(read, 30000);
+    const interval = window.setInterval(read, 30_000);
     window.addEventListener("storage", read);
-    window.addEventListener(balanceUpdatedEvent, read);
+    window.addEventListener(BALANCE_UPDATED_EVENT, read);
 
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("storage", read);
-      window.removeEventListener(balanceUpdatedEvent, read);
+      window.removeEventListener(BALANCE_UPDATED_EVENT, read);
     };
   }, []);
 
@@ -181,18 +81,9 @@ function useWakeLock() {
   const [sentinel, setSentinel] = useState<WakeLockSentinel | null>(null);
 
   const requestWakeLock = useCallback(async () => {
-    if (!window.isSecureContext) {
-      setState("insecure");
-      return;
-    }
-
+    if (!window.isSecureContext) { setState("insecure"); return; }
     const wakeLock = (navigator as WakeLockNavigator).wakeLock;
-
-    if (!wakeLock) {
-      setState("unsupported");
-      return;
-    }
-
+    if (!wakeLock) { setState("unsupported"); return; }
     try {
       const lock = await wakeLock.request("screen");
       lock.addEventListener("release", () => setState("available"));
@@ -209,9 +100,7 @@ function useWakeLock() {
         void requestWakeLock();
       }
     };
-
     document.addEventListener("visibilitychange", onVisibilityChange);
-
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       void sentinel?.release();
@@ -227,7 +116,6 @@ function useBankRefresh() {
 
   const refreshBank = useCallback(async () => {
     setRefreshState("refreshing");
-
     try {
       const response = await fetch("/api/refresh-bank", {
         method: "POST",
@@ -240,9 +128,8 @@ function useBankRefresh() {
         return;
       }
 
-      localStorage.setItem(balanceStorageKey, JSON.stringify(data.balance));
-      sessionStorage.setItem(balanceStorageKey, JSON.stringify(data.balance));
-      window.dispatchEvent(new Event(balanceUpdatedEvent));
+      writeBalance(data.balance);
+      dispatchBalanceUpdated();
       setLastRefresh(new Date());
       setRefreshState("success");
     } catch {
@@ -251,13 +138,8 @@ function useBankRefresh() {
   }, []);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void refreshBank();
-    }, 2500);
-    const interval = window.setInterval(() => {
-      void refreshBank();
-    }, autoRefreshMs);
-
+    const timeout = window.setTimeout(() => void refreshBank(), 2500);
+    const interval = window.setInterval(() => void refreshBank(), AUTO_REFRESH_MS);
     return () => {
       window.clearTimeout(timeout);
       window.clearInterval(interval);
@@ -279,69 +161,69 @@ function usePullToRefresh(onRefresh: () => void) {
 
   const onTouchMove = useCallback(
     (event: TouchEvent<HTMLElement>) => {
-      if (startY === null) {
-        return;
-      }
-
+      if (startY === null) return;
       const currentY = event.touches[0]?.clientY ?? startY;
-      const distance = Math.max(0, currentY - startY);
-      setPullDistance(Math.min(distance, 110));
+      setPullDistance(Math.min(Math.max(0, currentY - startY), 110));
     },
     [startY]
   );
 
   const onTouchEnd = useCallback(() => {
-    if (pullDistance >= 70) {
-      onRefresh();
-    }
-
+    if (pullDistance >= 70) onRefresh();
     setStartY(null);
     setPullDistance(0);
   }, [onRefresh, pullDistance]);
 
   return {
     pullDistance,
-    touchHandlers: {
-      onTouchEnd,
-      onTouchMove,
-      onTouchStart,
-    },
+    touchHandlers: { onTouchEnd, onTouchMove, onTouchStart },
   };
 }
+
+// ── Page ──────────────────────────────────────────────────────
 
 export default function DisplayPage() {
   const { balance, plan } = useDisplayData();
   const { requestWakeLock, wakeLockState } = useWakeLock();
   const { lastRefresh, refreshBank, refreshState } = useBankRefresh();
   const { pullDistance, touchHandlers } = usePullToRefresh(refreshBank);
+
   const currency = balance?.currency ?? plan?.currency ?? "GBP";
   const pots = plan?.pots ?? { spend: 0, save: 0, give: 0 };
-  const saveGoals = plan?.saveGoals?.length ? plan.saveGoals : defaultSaveGoals;
+  const saveGoals = plan?.saveGoals?.length ? plan.saveGoals : DEFAULT_SAVE_GOALS;
+
   const displayGoals = saveGoals.map((goal, index) => {
     const fallbackAllocation = index === 0 ? pots.save : 0;
     const saved = roundMoney(goal.allocated ?? fallbackAllocation);
     const progress = Math.max(0, Math.min(100, (saved / goal.target) * 100));
-
     return { ...goal, saved, progress };
   });
-  const balanceText = balance ? formatMoney(balance.amount, balance.currency) : formatMoney(0, currency);
+
+  const balanceText = balance
+    ? formatMoney(balance.amount, balance.currency)
+    : formatMoney(0, currency);
+
   const statusText = (() => {
-    if (refreshState === "refreshing") return "Refreshing bank...";
+    if (refreshState === "refreshing")      return "Refreshing bank...";
     if (refreshState === "needs-connection") return "Reconnect bank";
-    if (refreshState === "error") return "Refresh failed";
+    if (refreshState === "error")           return "Refresh failed";
     if (lastRefresh) return `Refreshed ${formatLastChecked(lastRefresh.toISOString())}`;
-    return balance ? `Updated ${formatLastChecked(balance.updatedAt ?? balance.fetchedAt)}` : "Bank not connected";
+    return balance
+      ? `Updated ${formatLastChecked(balance.updatedAt ?? balance.fetchedAt)}`
+      : "Bank not connected";
   })();
+
   const wakeText = useMemo(() => {
-    if (wakeLockState === "active") return "Screen awake";
-    if (wakeLockState === "insecure") return "Needs HTTPS";
+    if (wakeLockState === "active")      return "Screen awake";
+    if (wakeLockState === "insecure")    return "Needs HTTPS";
     if (wakeLockState === "unsupported") return "Use Android display settings";
-    if (wakeLockState === "blocked") return "Wake blocked";
+    if (wakeLockState === "blocked")     return "Wake blocked";
     return "Keep awake";
   }, [wakeLockState]);
 
   return (
     <main className="display-page" {...touchHandlers}>
+      {/* Pull-to-refresh indicator */}
       <div
         className={`display-refresh-cue ${pullDistance >= 70 ? "display-refresh-cue--ready" : ""}`}
         style={{ transform: `translateY(${Math.max(-46, pullDistance - 46)}px)` }}
@@ -349,7 +231,9 @@ export default function DisplayPage() {
       >
         {pullDistance >= 70 ? "Release to refresh" : "Pull to refresh"}
       </div>
+
       <section className="display-screen" aria-labelledby="display-title">
+        {/* Header */}
         <header className="display-header">
           <div>
             <p>Penni</p>
@@ -365,12 +249,14 @@ export default function DisplayPage() {
           />
         </header>
 
+        {/* Balance */}
         <section className="display-balance" aria-live="polite">
           <span>{statusText}</span>
           <strong>{balanceText}</strong>
           <p>{balance?.accountName ?? "Ready for pocket money"}</p>
         </section>
 
+        {/* Pots */}
         <section className="display-pots" aria-label="Money pots">
           <article className="display-pot display-pot--pink">
             <span>Spend</span>
@@ -386,6 +272,7 @@ export default function DisplayPage() {
           </article>
         </section>
 
+        {/* Savings goals */}
         <section className="display-goal" aria-label="Savings goals">
           <div className="display-goal__heading">
             <span>Saving for</span>
@@ -396,7 +283,9 @@ export default function DisplayPage() {
               <li key={goal.id}>
                 <div className="display-goal-row">
                   <h2>{goal.name}</h2>
-                  <strong>{formatMoney(goal.saved, currency)} / {formatMoney(goal.target, currency)}</strong>
+                  <strong>
+                    {formatMoney(goal.saved, currency)} / {formatMoney(goal.target, currency)}
+                  </strong>
                 </div>
                 <div
                   className="display-progress"
@@ -413,29 +302,25 @@ export default function DisplayPage() {
           </ul>
         </section>
 
+        {/* Footer controls */}
         <footer className="display-footer">
-          <button
-            className="display-button display-button--secondary"
-            type="button"
-            disabled={refreshState === "refreshing"}
-            onClick={refreshBank}
-          >
-            {refreshState === "refreshing" ? "Refreshing" : "Refresh"}
-          </button>
           <button
             className="display-button"
             type="button"
+            onClick={() => void refreshBank()}
+            disabled={refreshState === "refreshing"}
+          >
+            Refresh
+          </button>
+          <button
+            className={`display-button display-button--secondary ${wakeLockState === "active" ? "display-button--active" : ""}`}
+            type="button"
+            onClick={() => void requestWakeLock()}
             disabled={wakeLockState === "active" || wakeLockState === "unsupported" || wakeLockState === "insecure"}
-            onClick={requestWakeLock}
-            title={
-              wakeLockState === "insecure"
-                ? "Android Chrome only allows Wake Lock on HTTPS or localhost."
-                : undefined
-            }
           >
             {wakeText}
           </button>
-          <Link className="display-link" href="/">
+          <Link className="display-link" href="/settings">
             Setup
           </Link>
         </footer>

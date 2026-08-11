@@ -2,68 +2,26 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { formatMoney } from "../../lib/money";
+import { readHistory } from "../../lib/storage";
+import type { HistoryEntry, PenniSplit } from "../../lib/types";
 
-type PotDelta = {
-  spend: number;
-  save: number;
-  give: number;
-};
+// ── Helpers ───────────────────────────────────────────────────
 
-type HistoryEntry = {
-  id: string;
-  kind: "incoming" | "outgoing";
-  amount: number;
-  currency: string;
-  pots: PotDelta;
-  recordedAt: string;
-};
-
-const historyStorageKey = "penni-history";
-
-function loadHistory(): HistoryEntry[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const stored = localStorage.getItem(historyStorageKey);
-    if (!stored) return [];
-    const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as HistoryEntry[];
-  } catch {
-    return [];
-  }
-}
-
-function formatMoney(amount: number, currency: string) {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency,
-    }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
-
-function formatTime(iso: string) {
+function formatTime(iso: string): string {
   const date = new Date(iso);
   if (isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+  return new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
-function formatDateHeading(iso: string) {
+function formatDateHeading(iso: string): string {
   const date = new Date(iso);
   if (isNaN(date.getTime())) return "Unknown date";
   const now = new Date();
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-
-  if (date.toDateString() === now.toDateString()) return "Today";
+  if (date.toDateString() === now.toDateString())       return "Today";
   if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "numeric",
@@ -77,24 +35,20 @@ function groupByDate(entries: HistoryEntry[]) {
 
   for (const entry of entries) {
     const date = new Date(entry.recordedAt);
-    const dateKey = isNaN(date.getTime())
-      ? "unknown"
-      : date.toDateString();
-
-    if (seen.has(dateKey)) {
-      groups[seen.get(dateKey)!].entries.push(entry);
+    const dateKey = isNaN(date.getTime()) ? "unknown" : date.toDateString();
+    const idx = seen.get(dateKey);
+    if (idx !== undefined) {
+      groups[idx].entries.push(entry);
     } else {
       seen.set(dateKey, groups.length);
-      groups.push({
-        dateKey,
-        label: formatDateHeading(entry.recordedAt),
-        entries: [entry],
-      });
+      groups.push({ dateKey, label: formatDateHeading(entry.recordedAt), entries: [entry] });
     }
   }
 
   return groups;
 }
+
+// ── Sub-components ────────────────────────────────────────────
 
 type PotChipProps = {
   label: string;
@@ -114,9 +68,11 @@ function PotChip({ label, amount, currency, tone, kind }: PotChipProps) {
   );
 }
 
-export default function HistoryPage() {
-  const [entries] = useState<HistoryEntry[]>(loadHistory);
+// ── Page ──────────────────────────────────────────────────────
 
+export default function HistoryPage() {
+  // useState initializer runs once on mount — safe to call readHistory() here.
+  const [entries] = useState<HistoryEntry[]>(readHistory);
   const groups = groupByDate(entries);
 
   return (
@@ -146,50 +102,32 @@ export default function HistoryPage() {
               <li key={group.dateKey} className="history-group">
                 <h2 className="history-date-heading">{group.label}</h2>
                 <ol className="history-group-entries">
-                  {group.entries.map((entry) => (
-                    <li key={entry.id} className={`history-entry history-entry--${entry.kind}`}>
-                      <div className="history-entry-top">
-                        <div className="history-entry-main">
-                          <span className="history-entry-kind">
-                            {entry.kind === "incoming" ? "Money in" : "Money spent"}
-                          </span>
-                          <strong className="history-entry-amount">
-                            {entry.kind === "incoming" ? "+" : "−"}
-                            {formatMoney(entry.amount, entry.currency)}
-                          </strong>
+                  {group.entries.map((entry) => {
+                    const pots = entry.pots as PenniSplit;
+                    return (
+                      <li key={entry.id} className={`history-entry history-entry--${entry.kind}`}>
+                        <div className="history-entry-top">
+                          <div className="history-entry-main">
+                            <span className="history-entry-kind">
+                              {entry.kind === "incoming" ? "Money in" : "Money spent"}
+                            </span>
+                            <strong className="history-entry-amount">
+                              {entry.kind === "incoming" ? "+" : "−"}
+                              {formatMoney(entry.amount, entry.currency)}
+                            </strong>
+                          </div>
+                          <time className="history-entry-time" dateTime={entry.recordedAt}>
+                            {formatTime(entry.recordedAt)}
+                          </time>
                         </div>
-                        <time
-                          className="history-entry-time"
-                          dateTime={entry.recordedAt}
-                        >
-                          {formatTime(entry.recordedAt)}
-                        </time>
-                      </div>
-                      <div className="history-pot-chips" aria-label="Pot breakdown">
-                        <PotChip
-                          label="Spend"
-                          amount={Math.abs(entry.pots.spend)}
-                          currency={entry.currency}
-                          tone="pink"
-                          kind={entry.kind}
-                        />
-                        <PotChip
-                          label="Save"
-                          amount={Math.abs(entry.pots.save)}
-                          currency={entry.currency}
-                          tone="green"
-                          kind={entry.kind}
-                        />
-                        <PotChip
-                          label="Give"
-                          amount={Math.abs(entry.pots.give)}
-                          currency={entry.currency}
-                          tone="gold"
-                          kind={entry.kind}
-                        />
-                      </div>
-                    </li>
-                  ))}
+                        <div className="history-pot-chips" aria-label="Pot breakdown">
+                          <PotChip label="Spend" amount={Math.abs(pots.spend)} currency={entry.currency} tone="pink"  kind={entry.kind} />
+                          <PotChip label="Save"  amount={Math.abs(pots.save)}  currency={entry.currency} tone="green" kind={entry.kind} />
+                          <PotChip label="Give"  amount={Math.abs(pots.give)}  currency={entry.currency} tone="gold"  kind={entry.kind} />
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ol>
               </li>
             ))}
