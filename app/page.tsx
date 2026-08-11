@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useSyncExternalStore, useCallback } from "react";
+import { useEffect, useState, useSyncExternalStore, useCallback } from "react";
 
 type StoredBalance = {
   amount: number;
@@ -439,7 +439,16 @@ function SplitPrompt({
 export default function HomePage() {
   const storedBalance = useSyncExternalStore(subscribe, getStoredBalanceSnapshot, () => null);
   const balance = parseStoredBalance(storedBalance);
-  const [storedPlan, setStoredPlan] = useState<PenniPlan | null>(getInitialPlan);
+  const [storedPlan, setStoredPlan] = useState<PenniPlan | null>(null);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setStoredPlan(getInitialPlan());
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, []);
+
   const plan =
     balance && (!storedPlan || storedPlan.currency !== balance.currency)
       ? createPlanFromBalance(balance)

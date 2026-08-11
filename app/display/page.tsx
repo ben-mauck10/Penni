@@ -177,17 +177,7 @@ function useDisplayData() {
 }
 
 function useWakeLock() {
-  const [state, setState] = useState<WakeLockState>(() => {
-    if (typeof window !== "undefined" && !window.isSecureContext) {
-      return "insecure";
-    }
-
-    if (typeof navigator !== "undefined" && !("wakeLock" in navigator)) {
-      return "unsupported";
-    }
-
-    return "available";
-  });
+  const [state, setState] = useState<WakeLockState>("available");
   const [sentinel, setSentinel] = useState<WakeLockSentinel | null>(null);
 
   const requestWakeLock = useCallback(async () => {
@@ -326,9 +316,14 @@ export default function DisplayPage() {
   const { pullDistance, touchHandlers } = usePullToRefresh(refreshBank);
   const currency = balance?.currency ?? plan?.currency ?? "GBP";
   const pots = plan?.pots ?? { spend: 0, save: 0, give: 0 };
-  const mainGoal = plan?.saveGoals[0] ?? defaultSaveGoals[0];
-  const saved = roundMoney(mainGoal.allocated ?? pots.save);
-  const progress = Math.max(0, Math.min(100, (saved / mainGoal.target) * 100));
+  const saveGoals = plan?.saveGoals?.length ? plan.saveGoals : defaultSaveGoals;
+  const displayGoals = saveGoals.map((goal, index) => {
+    const fallbackAllocation = index === 0 ? pots.save : 0;
+    const saved = roundMoney(goal.allocated ?? fallbackAllocation);
+    const progress = Math.max(0, Math.min(100, (saved / goal.target) * 100));
+
+    return { ...goal, saved, progress };
+  });
   const balanceText = balance ? formatMoney(balance.amount, balance.currency) : formatMoney(0, currency);
   const statusText = (() => {
     if (refreshState === "refreshing") return "Refreshing bank...";
@@ -391,21 +386,31 @@ export default function DisplayPage() {
           </article>
         </section>
 
-        <section className="display-goal" aria-label="Savings goal">
-          <div>
+        <section className="display-goal" aria-label="Savings goals">
+          <div className="display-goal__heading">
             <span>Saving for</span>
-            <h2>{mainGoal.name}</h2>
+            <strong>{formatMoney(pots.save, currency)}</strong>
           </div>
-          <strong>{formatMoney(saved, currency)} / {formatMoney(mainGoal.target, currency)}</strong>
-          <div
-            className="display-progress"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={mainGoal.target}
-            aria-valuenow={Math.min(saved, mainGoal.target)}
-          >
-            <span style={{ width: `${progress}%` }} />
-          </div>
+          <ul className="display-goal-list">
+            {displayGoals.map((goal) => (
+              <li key={goal.id}>
+                <div className="display-goal-row">
+                  <h2>{goal.name}</h2>
+                  <strong>{formatMoney(goal.saved, currency)} / {formatMoney(goal.target, currency)}</strong>
+                </div>
+                <div
+                  className="display-progress"
+                  role="progressbar"
+                  aria-label={`${goal.name} savings progress`}
+                  aria-valuemin={0}
+                  aria-valuemax={goal.target}
+                  aria-valuenow={Math.min(goal.saved, goal.target)}
+                >
+                  <span style={{ width: `${goal.progress}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <footer className="display-footer">

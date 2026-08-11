@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type SaveGoal = {
   id: string;
@@ -154,22 +154,29 @@ function goalToRow(g: SaveGoal): GoalRow {
 }
 
 type SplitError = string | undefined;
+const defaultGoalRows: GoalRow[] = [{ id: "default", name: "Lego Set", target: "150" }];
 
 export default function SettingsPage() {
-  const storedPlan = typeof window !== "undefined" ? getStoredPlan() ?? getFallbackPlan() : null;
-  const storedSplit = typeof window !== "undefined" ? getStoredSplit() : defaultSplit;
-
-  const initialGoals =
-    storedPlan?.saveGoals?.map(goalToRow) ?? [
-      { id: "default", name: "Lego Set", target: "150" },
-    ];
-
-  const [goals, setGoals] = useState<GoalRow[]>(initialGoals);
-  const [spendPct, setSpendPct] = useState(String(Math.round(storedSplit.spend * 100)));
-  const [savePct, setSavePct] = useState(String(Math.round(storedSplit.save * 100)));
-  const [givePct, setGivePct] = useState(String(Math.round(storedSplit.give * 100)));
+  const [goals, setGoals] = useState<GoalRow[]>(defaultGoalRows);
+  const [spendPct, setSpendPct] = useState(String(Math.round(defaultSplit.spend * 100)));
+  const [savePct, setSavePct] = useState(String(Math.round(defaultSplit.save * 100)));
+  const [givePct, setGivePct] = useState(String(Math.round(defaultSplit.give * 100)));
   const [splitError, setSplitError] = useState<SplitError>();
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const storedPlan = getStoredPlan() ?? getFallbackPlan();
+      const storedSplit = getStoredSplit();
+
+      setGoals(storedPlan?.saveGoals?.map(goalToRow) ?? defaultGoalRows);
+      setSpendPct(String(Math.round(storedSplit.spend * 100)));
+      setSavePct(String(Math.round(storedSplit.save * 100)));
+      setGivePct(String(Math.round(storedSplit.give * 100)));
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   const spendNum = parseInt(spendPct, 10);
   const saveNum = parseInt(savePct, 10);
