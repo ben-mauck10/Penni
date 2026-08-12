@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     if (typeof refreshToken === "string" && refreshToken.trim()) {
       response.cookies.set(refreshCookieName, refreshToken, {
         httpOnly: true,
-        maxAge: 60 * 60 * 24 * 80,
+        maxAge: 60 * 60 * 24 * 90, // 90 days
         path: "/",
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",

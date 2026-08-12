@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type TouchEvent, useCallback, useEffect, useState } from "react";
-import { formatLastChecked, formatMoney, roundMoney } from "../../lib/money";
+import { formatLastChecked, formatMoney } from "../../lib/money";
 import {
   BALANCE_UPDATED_EVENT,
   KEYS,
@@ -26,7 +26,7 @@ type WakeLockNavigator = Navigator & {
   wakeLock?: { request: (type: "screen") => Promise<WakeLockSentinel> };
 };
 
-type RefreshBankResponse = { balance?: StoredBalance; error?: string };
+type RefreshBankResponse = { balance?: StoredBalance; error?: string; message?: string };
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
@@ -72,7 +72,10 @@ function useBankRefresh() {
       const response = await fetch("/api/refresh-bank", { method: "POST", cache: "no-store" });
       const data = (await response.json().catch(() => null)) as RefreshBankResponse | null;
       if (!response.ok || !data?.balance) {
-        setRefreshState(response.status === 401 ? "needs-connection" : "error");
+        // Only prompt reconnect on 401 (token genuinely gone/invalid).
+        // On other errors (502, 500, network) just show "error" and retry next cycle.
+        const needsReconnect = response.status === 401 && data?.error === "no_refresh_token";
+        setRefreshState(needsReconnect ? "needs-connection" : "error");
         return;
       }
       writeBalance(data.balance);
@@ -149,14 +152,6 @@ export default function DisplayPage() {
   const { requestWakeLock, wakeLockActive } = useWakeLock();
 
   const currency = balance?.currency ?? plan?.currency ?? "GBP";
-  const saveGoals = plan?.saveGoals ?? [];
-  const savePot = plan?.pots.save ?? 0;
-
-  const goals = saveGoals.map((goal) => {
-    const saved = roundMoney(goal.allocated ?? 0);
-    const progress = goal.target > 0 ? Math.max(0, Math.min(100, (saved / goal.target) * 100)) : 0;
-    return { ...goal, saved, progress };
-  });
 
   const balanceText = balance ? formatMoney(balance.amount, currency) : "–";
 
@@ -202,40 +197,19 @@ export default function DisplayPage() {
           </span>
         </div>
 
-        {/* Goals */}
-        {goals.length > 0 ? (
-          <div className="display-goals">
-            <p className="display-goals__label">Saving for</p>
-            <ul className="display-goals__list">
-              {goals.map((goal) => (
-                <li key={goal.id} className="display-goal-item">
-                  <div className="display-goal-item__row">
-                    <span className="display-goal-item__name">{goal.name}</span>
-                    <span className="display-goal-item__amount">
-                      {formatMoney(goal.saved, currency)}
-                      <em> / {formatMoney(goal.target, currency)}</em>
-                    </span>
-                  </div>
-                  <div
-                    className="display-goal-item__bar"
-                    role="progressbar"
-                    aria-label={`${goal.name} progress`}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={Math.round(goal.progress)}
-                  >
-                    <span style={{ width: `${goal.progress}%` }} />
-                  </div>
-                  <span className="display-goal-item__pct">{Math.round(goal.progress)}%</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <div className="display-goals display-goals--empty">
-            <p>No goals yet — set them up in the parent app.</p>
-          </div>
-        )}
+        {/* Pots */}
+        <div className="display-pots">
+          {[
+            { key: "spend", label: "Spend", tone: "pink",  value: plan?.pots.spend ?? 0 },
+            { key: "save",  label: "Save",  tone: "green", value: plan?.pots.save  ?? 0 },
+            { key: "give",  label: "Give",  tone: "gold",  value: plan?.pots.give  ?? 0 },
+          ].map((pot) => (
+            <div key={pot.key} className={`display-pot display-pot--${pot.tone}`}>
+              <span>{pot.label}</span>
+              <strong>{formatMoney(pot.value, currency)}</strong>
+            </div>
+          ))}
+        </div>
 
         {/* Footer controls */}
         <footer className="display-footer">
