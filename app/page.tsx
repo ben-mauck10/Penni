@@ -62,6 +62,15 @@ export default function HomePage() {
   const balanceText = balance
     ? formatMoney(balance.amount, balance.currency)
     : formatMoney(0, currency);
+
+  // Scale font size down for longer balance strings to prevent wrapping.
+  const balanceFontSize = (() => {
+    const len = balanceText.length;
+    if (len <= 6)  return "clamp(2.8rem, 12vw, 4rem)";
+    if (len <= 8)  return "clamp(2.2rem, 9vw, 3.25rem)";
+    if (len <= 10) return "clamp(1.8rem, 7.5vw, 2.75rem)";
+    return "clamp(1.5rem, 6vw, 2.25rem)";
+  })();
   const lastCheckedText = formatLastChecked(balance?.updatedAt ?? balance?.fetchedAt);
 
   let statusText = lastCheckedText;
@@ -172,7 +181,7 @@ export default function HomePage() {
         {/* Balance */}
         <section className="home-balance" aria-live="polite" aria-labelledby="screen-title">
           <span>{statusText}</span>
-          <strong>{balanceText}</strong>
+          <strong style={{ fontSize: balanceFontSize }}>{balanceText}</strong>
           <p>
             {balance
               ? getCheerMessage(balance.amount)

@@ -272,8 +272,8 @@ a { color: inherit; }
 .home-balance span   { color: var(--berry); font-size: 0.82rem; font-weight: 900; }
 .home-balance strong {
   overflow-wrap: anywhere;
-  font-size: clamp(2.8rem, 14vw, 5rem);
-  line-height: 0.96;
+  font-size: clamp(1.75rem, 8vw, 3.25rem); /* overridden per-render by inline style */
+  line-height: 1.05;
 }
 .home-balance p { margin: 0; color: var(--muted); font-size: 0.95rem; font-weight: 800; line-height: 1.35; }
 
