@@ -55,9 +55,14 @@ export function parseStoredPlan(stored: string | null): PenniPlan | null {
 
     let saveGoals: SaveGoal[];
     if (Array.isArray(parsed.saveGoals) && parsed.saveGoals.length > 0) {
-      saveGoals = parsed.saveGoals.filter(
-        (g) => g && typeof g.name === "string" && typeof g.target === "number"
-      );
+      saveGoals = parsed.saveGoals
+        .filter((g) => g && typeof g.name === "string" && typeof g.target === "number")
+        .map((g) => ({
+          id: String(g.id ?? crypto.randomUUID()),
+          name: g.name as string,
+          target: g.target as number,
+          allocated: typeof g.allocated === "number" ? g.allocated : undefined,
+        }));
     } else if (parsed.saveGoal?.name && typeof parsed.saveGoal.target === "number") {
       // Migrate old single-goal format
       saveGoals = [
@@ -182,7 +187,9 @@ export function readOrCreatePlan(): PenniPlan | null {
   const balance = readBalance();
   if (!balance) return null;
 
-  return createPlanFromBalance(balance);
+  const newPlan = createPlanFromBalance(balance);
+  writePlan(newPlan); // persist so display page can read allocated values
+  return newPlan;
 }
 
 // ── Balance snapshot for useSyncExternalStore ─────────────────
