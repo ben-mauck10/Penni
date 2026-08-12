@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { type TouchEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -239,14 +238,6 @@ export default function DisplayPage() {
             <p>Penni</p>
             <h1 id="display-title">Oinkbank</h1>
           </div>
-          <Image
-            className="display-pig"
-            src="/penni-oinkbank.png"
-            alt=""
-            width={1229}
-            height={820}
-            priority
-          />
         </header>
 
         {/* Balance */}

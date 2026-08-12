@@ -520,16 +520,15 @@ a { color: inherit; }
 
 /* ═══════════════════════════════════════════════════════════
    DISPLAY PAGE  (app/display/page.tsx)
-   Landscape-first layout for the dedicated Android display.
+   Portrait phones: stacked scrolling layout.
+   Landscape (the intended use): fixed grid filling the screen.
    ══════════════════════════════════════════════════════════ */
 
 .display-page {
   position: relative;
-  display: grid;
   min-height: 100dvh;
-  place-items: center;
-  overflow: hidden;
-  padding: 8px;
+  overflow-y: auto;
+  padding: 12px;
   background: #0f1c33;
   touch-action: pan-y;
 }
@@ -549,113 +548,89 @@ a { color: inherit; }
   padding: 0 14px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 900;
-  opacity: 0.92;
   pointer-events: none;
   transition: transform 0.18s ease;
 }
 .display-refresh-cue--ready { background: var(--soft-green); color: var(--leaf-dark); }
 
-/* Main screen card — landscape grid */
+/* Portrait: single-column card, scrolls naturally */
 .display-screen {
   display: grid;
-  width: min(100vw - 16px, 920px);
-  height: min(100dvh - 16px, 520px);
-  min-height: 300px;
-  grid-template-columns: minmax(0, 1.2fr) minmax(200px, 0.8fr);
-  grid-template-rows: 72px minmax(0, 1fr) 104px 46px;
-  grid-template-areas:
-    "header pots"
-    "balance pots"
-    "goal   goal"
-    "footer footer";
-  gap: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 8px;
-  padding: 10px;
+  width: min(100%, 480px);
+  margin: 0 auto;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  padding: 14px;
   background: #fffaf1;
-  box-shadow: 0 20px 52px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 20px 52px rgba(0, 0, 0, 0.36);
 }
 
 .display-header {
-  grid-area: header;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 112px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   min-width: 0;
 }
 .display-header p, .display-header h1 { margin: 0; }
 .display-header p  { color: var(--muted); font-size: 0.82rem; font-weight: 900; }
-.display-header h1 { color: var(--foreground); font-size: 2rem; line-height: 1; }
+.display-header h1 { color: var(--foreground); font-size: 1.75rem; line-height: 1; }
 .display-pig {
-  width: 112px;
+  width: 72px;
   height: auto;
-  justify-self: end;
-  filter: drop-shadow(0 10px 14px rgba(243, 41, 114, 0.22));
+  flex-shrink: 0;
+  filter: drop-shadow(0 8px 12px rgba(243, 41, 114, 0.22));
 }
 
 .display-balance {
-  grid-area: balance;
   display: grid;
-  align-content: center;
   gap: 6px;
-  min-width: 0;
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 10px;
+  padding: 18px 16px;
   background: #55c8da;
   color: #fff;
   text-align: center;
 }
 .display-balance span, .display-balance p { color: #fff; font-weight: 900; }
-.display-balance span { font-size: 0.82rem; }
+.display-balance span   { font-size: 0.82rem; }
 .display-balance strong {
-  min-width: 0;
   overflow-wrap: anywhere;
-  font-size: clamp(3rem, 10vw, 7rem);
-  line-height: 0.9;
+  font-size: clamp(2.4rem, 12vw, 4rem);
+  line-height: 1;
 }
-.display-balance p { font-size: 1rem; }
+.display-balance p { font-size: 0.95rem; }
 
+/* Portrait pots: 3 columns side by side */
 .display-pots {
-  grid-area: pots;
   display: grid;
-  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  min-width: 0;
-  min-height: 0;
 }
 .display-pot {
   display: grid;
-  align-content: center;
-  gap: 6px;
-  min-width: 0;
+  gap: 4px;
   border: 1px solid rgba(17, 29, 58, 0.1);
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px 8px;
+  text-align: center;
 }
 .display-pot--pink  { background: var(--soft-pink); }
 .display-pot--green { background: var(--soft-green); }
 .display-pot--gold  { background: var(--soft-gold); }
-.display-pot span   { color: var(--muted); font-size: 0.82rem; font-weight: 900; }
+.display-pot span   { color: var(--muted); font-size: 0.72rem; font-weight: 900; }
 .display-pot strong {
-  min-width: 0;
   overflow-wrap: anywhere;
   color: var(--foreground);
-  font-size: clamp(1.4rem, 3.5vw, 2.6rem);
+  font-size: clamp(1.1rem, 5vw, 1.6rem);
   line-height: 1;
 }
 
 .display-goal {
-  grid-area: goal;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  align-content: stretch;
   gap: 8px;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
   border: 1px solid rgba(17, 29, 58, 0.1);
   border-radius: 8px;
   padding: 12px;
@@ -665,35 +640,31 @@ a { color: inherit; }
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
-.display-goal span { color: var(--muted); font-size: 0.82rem; font-weight: 900; }
-.display-goal h2   { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: clamp(0.9rem, 2vw, 1.4rem); line-height: 1; }
+.display-goal span { color: var(--muted); font-size: 0.78rem; font-weight: 900; }
+.display-goal h2   { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: 1rem; line-height: 1.2; }
 .display-goal__heading strong, .display-goal-row strong {
   flex: 0 0 auto;
-  border-radius: 8px;
-  padding: 5px 8px;
+  border-radius: 6px;
+  padding: 3px 8px;
   background: var(--soft-green);
   color: var(--leaf-dark);
-  font-size: clamp(0.72rem, 1.4vw, 0.95rem);
+  font-size: 0.82rem;
   white-space: nowrap;
 }
 .display-goal-list {
   display: grid;
-  gap: 8px;
-  min-height: 0;
+  gap: 10px;
   margin: 0;
-  padding: 0 3px 0 0;
+  padding: 0;
   list-style: none;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
 }
-.display-goal-list li { display: grid; gap: 6px; }
+.display-goal-list li { display: grid; gap: 5px; }
 
 .display-progress {
-  height: 12px;
+  height: 10px;
   overflow: hidden;
   border-radius: 999px;
   background: #f3eadb;
@@ -706,22 +677,20 @@ a { color: inherit; }
 }
 
 .display-footer {
-  grid-area: footer;
   display: flex;
   gap: 8px;
-  align-items: stretch;
-  justify-content: flex-end;
-  min-width: 0;
+  padding-top: 4px;
 }
 .display-button, .display-link {
   display: inline-flex;
-  min-width: 100px;
+  flex: 1 1 0;
+  min-height: 46px;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  padding: 0 14px;
+  padding: 0 10px;
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 900;
   text-decoration: none;
   white-space: nowrap;
@@ -736,44 +705,85 @@ a { color: inherit; }
 .display-button--active    { background: var(--leaf); }
 .display-button:disabled   { background: #e9eef3; color: var(--muted); cursor: default; }
 .display-link {
-  border: 1px solid rgba(17, 29, 58, 0.16);
+  border: 1px solid rgba(17, 29, 58, 0.2);
   background: #fff;
   color: var(--foreground);
 }
 
-/* Compact landscape (phones in landscape, small tablets) */
-@media (max-width: 700px) and (orientation: landscape) {
-  .display-page   { padding: 5px; }
-  .display-screen {
-    width: calc(100vw - 10px);
-    height: calc(100dvh - 10px);
-    min-height: 0;
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-    grid-template-rows: 44px minmax(0, 1fr) 70px 32px;
-    grid-template-areas:
-      "header header"
-      "balance goal"
-      "pots    goal"
-      "footer  footer";
-    gap: 5px;
-    padding: 5px;
+/* ── Landscape: fixed grid filling the screen ── */
+@media (orientation: landscape) and (min-height: 360px) {
+  .display-page {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    padding: 8px;
   }
-  .display-header  { grid-template-columns: minmax(0, 1fr) 64px; gap: 6px; }
-  .display-header p, .display-pot span, .display-goal span { font-size: 0.58rem; }
-  .display-header h1 { font-size: 1.1rem; }
-  .display-pig       { width: 64px; }
-  .display-balance, .display-pot, .display-goal { padding: 6px; }
-  .display-balance strong { font-size: clamp(2rem, 9vw, 3.4rem); }
-  .display-balance p      { font-size: 0.64rem; }
-  .display-pots { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; gap: 5px; }
-  .display-pot  { gap: 2px; }
-  .display-pot strong { font-size: clamp(0.85rem, 3vw, 1.2rem); }
-  .display-goal h2 { font-size: 0.72rem; }
-  .display-goal__heading strong, .display-goal-row strong { padding: 3px 6px; font-size: 0.54rem; }
-  .display-goal-list { gap: 5px; }
-  .display-progress  { height: 7px; }
-  .display-button, .display-link { min-width: 70px; padding: 0 8px; font-size: 0.64rem; }
-  .display-refresh-cue { top: 5px; min-height: 26px; padding: 0 10px; font-size: 0.62rem; }
+  .display-screen {
+    width: min(100vw - 16px, 960px);
+    height: min(100dvh - 16px, 540px);
+    min-height: 0;
+    margin: 0;
+    grid-template-columns: minmax(0, 1.15fr) minmax(180px, 0.85fr);
+    grid-template-rows: 64px minmax(0, 1fr) 96px 44px;
+    grid-template-areas:
+      "header pots"
+      "balance pots"
+      "goal    goal"
+      "footer  footer";
+    gap: 8px;
+    padding: 10px;
+    border-radius: 8px;
+  }
+  .display-header { grid-area: header; }
+  .display-header h1 { font-size: 1.9rem; }
+  .display-pig { width: 100px; }
+  .display-balance {
+    grid-area: balance;
+    align-content: center;
+    padding: 10px 12px;
+  }
+  .display-balance strong { font-size: clamp(2.6rem, 9vw, 6rem); line-height: 0.92; }
+  .display-pots {
+    grid-area: pots;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .display-pot { text-align: left; padding: 10px 12px; }
+  .display-pot strong { font-size: clamp(1.3rem, 3vw, 2.4rem); }
+  .display-goal {
+    grid-area: goal;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+    padding: 10px 12px;
+  }
+  .display-goal-list { overflow-y: auto; }
+  .display-footer {
+    grid-area: footer;
+    justify-content: flex-end;
+    padding-top: 0;
+  }
+  .display-button, .display-link {
+    flex: 0 0 auto;
+    min-width: 110px;
+    min-height: 38px;
+    font-size: 0.88rem;
+  }
+}
+
+/* Compact landscape (small phones like iPhone SE landscape) */
+@media (orientation: landscape) and (max-height: 420px) {
+  .display-screen {
+    grid-template-rows: 48px minmax(0, 1fr) 72px 34px;
+    gap: 5px;
+    padding: 6px;
+  }
+  .display-header h1 { font-size: 1.3rem; }
+  .display-pig { width: 64px; }
+  .display-balance strong { font-size: clamp(2rem, 8vw, 3.5rem); }
+  .display-balance p, .display-pot span, .display-goal span { font-size: 0.62rem; }
+  .display-pot strong { font-size: clamp(1rem, 2.5vw, 1.6rem); }
+  .display-button, .display-link { min-width: 80px; font-size: 0.76rem; }
 }
 
 /* ═══════════════════════════════════════════════════════════

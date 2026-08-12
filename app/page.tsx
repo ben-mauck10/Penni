@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import SplitPrompt, { POT_META } from "./components/SplitPrompt";
@@ -158,14 +157,6 @@ export default function HomePage() {
         {/* Header */}
         <header className="home-header">
           <div className="home-brand">
-            <Image
-              className="home-pig"
-              src="/penni-oinkbank.png"
-              alt=""
-              width={1229}
-              height={820}
-              priority
-            />
             <div>
               <p>Penni</p>
               <h1 id="screen-title">Oinkbank</h1>
