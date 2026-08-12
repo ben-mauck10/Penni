@@ -151,6 +151,20 @@ export default function DisplayPage() {
   const { pullDistance, touchHandlers } = usePullToRefresh(refreshBank);
   const { requestWakeLock, wakeLockActive } = useWakeLock();
 
+  // Attempt fullscreen on mount if not already in standalone mode.
+  useEffect(() => {
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      ("standalone" in window.navigator &&
+        (window.navigator as { standalone?: boolean }).standalone === true);
+
+    if (!isStandalone && document.documentElement.requestFullscreen) {
+      void document.documentElement
+        .requestFullscreen({ navigationUI: "hide" })
+        .catch(() => {/* blocked on iOS or if no gesture — silently ignore */});
+    }
+  }, []);
+
   const currency = balance?.currency ?? plan?.currency ?? "GBP";
 
   const balanceText = balance ? formatMoney(balance.amount, currency) : "–";

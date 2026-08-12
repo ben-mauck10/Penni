@@ -26,6 +26,30 @@ import {
 } from "../lib/storage";
 import type { PenniPlan, PenniSplit } from "../lib/types";
 
+// Navigates to /display, but if not in standalone mode attempts fullscreen first.
+function DisplayLink() {
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      ("standalone" in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true);
+
+    if (!isStandalone && document.documentElement.requestFullscreen) {
+      e.preventDefault();
+      document.documentElement
+        .requestFullscreen({ navigationUI: "hide" })
+        .catch(() => {/* blocked — navigate normally */})
+        .finally(() => { window.location.href = "/display"; });
+    }
+    // If already standalone or fullscreen not available, follow the link normally.
+  };
+
+  return (
+    <a href="/display" onClick={handleClick}>
+      Display
+    </a>
+  );
+}
+
 export default function HomePage() {
   const storedBalanceJson = useSyncExternalStore(
     subscribeToBalance,
@@ -163,7 +187,7 @@ export default function HomePage() {
             </div>
           </div>
           <nav className="home-nav" aria-label="App navigation">
-            <Link href="/display">Display</Link>
+            <DisplayLink />
             <Link href="/history">History</Link>
             <Link href="/settings">Setup</Link>
           </nav>
