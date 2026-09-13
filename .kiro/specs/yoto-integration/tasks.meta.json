@@ -1,0 +1,553 @@
+{
+  "pbtResults": {
+    "3.6 Write property tests for crypto utilities (`lib/yoto/__tests__/crypto.pbt.ts`)": {
+      "status": "passed",
+      "lastRunTimestamp": 1788382677762
+    },
+    "6.4 Write property tests for Presentation Service (`lib/yoto/__tests__/presentation.pbt.ts`)": {
+      "status": "passed",
+      "lastRunTimestamp": 1789245046115
+    },
+    "7.2 Write property tests for Icon Generator (`lib/yoto/__tests__/icon.pbt.ts`)": {
+      "status": "passed",
+      "lastRunTimestamp": 1789245049044
+    }
+  },
+  "executionHistory": {
+    "1. Install dependencies and set up test runner": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606071
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381614133
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382233650
+      }
+    ],
+    "2.1 Create `lib/yoto/types.ts` with `BalanceMode`, `ConnectionStatus`, `YotoConnection`, and `YotoPresentationState` types exactly as specified in the design's Data Models section": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606104
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381618267
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382234685
+      }
+    ],
+    "3.1 Implement `generateSecureToken(bytes?: number): string` using `crypto.randomBytes`, returning base64url output; default 32 bytes (256 bits)": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606163
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382238192
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382316066
+      }
+    ],
+    "3.2 Implement `hashToken(token: string): string` returning a SHA-256 hex digest using Node.js built-in `crypto`": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606186
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382238872
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382316948
+      }
+    ],
+    "3.3 Implement `encryptToken(plaintext: string): string` using AES-256-GCM with a unique 12-byte IV per call; key sourced from `YOTO_ENCRYPTION_KEY` env var (32-byte hex); stored format `${iv_hex}:${ciphertext_base64url}:${authTag_hex}`": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606207
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382239842
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382318062
+      }
+    ],
+    "3.4 Implement `decryptToken(ciphertext: string): string` that parses the stored format, verifies the GCM auth tag, and throws on any mismatch": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606228
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382240634
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382319717
+      }
+    ],
+    "3.5 Implement `buildPkceParams(): { codeVerifier: string; codeChallenge: string }` that generates a URL-safe `codeVerifier` between 43 and 128 characters and derives `codeChallenge` as its SHA-256 base64url hash (RFC 7636 S256 method)": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606249
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382241519
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382320418
+      }
+    ],
+    "4.1 Create `lib/yoto/db.ts` that opens (or creates) the SQLite database at `YOTO_DB_PATH` (default `data/yoto.db`) using `better-sqlite3` and creates the `yoto_connections` table with all columns defined in the design's schema": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606272
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382242419
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382321735
+      }
+    ],
+    "4.2 Implement CRUD helpers: `upsertConnection(conn: Partial<YotoConnection>): void`, `getConnection(familyId: string): YotoConnection | null`, `deleteConnection(familyId: string): void`": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606298
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382328015
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383005311
+      }
+    ],
+    "4.3 Implement `getFamilyId(): string` that reads `PENNI_FAMILY_ID` env var and throws a clear startup error if absent": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606321
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382328318
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383006202
+      }
+    ],
+    "5.1 Implement `buildAuthUrl(origin: string): { url: string; state: string; codeVerifier: string }` that generates state (≥128 bits), calls `buildPkceParams()`, and builds the Yoto authorization URL with scopes `user:content:manage offline_access` only (no `family:devices:control`)": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606380
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383012476
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383171036
+      }
+    ],
+    "5.2 Implement `exchangeCode(code: string, codeVerifier: string, origin: string): Promise<TokenPair>` that POSTs to the Yoto token endpoint, encrypts returned tokens via `crypto.ts`, and writes them to the Connection Store; throws a structured error if the exchange fails": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606406
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383012528
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383172803
+      }
+    ],
+    "5.3 Implement `refreshTokens(familyId: string): Promise<TokenPair>` that decrypts the stored refresh token, POSTs to Yoto's token endpoint, atomically writes new tokens (retaining old refresh token if not rotated), retries on 5xx/network up to 3 times with ≥5 s interval, and sets `needs_attention` on 400/401 or after exhausting retries": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606429
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383012992
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383174688
+      }
+    ],
+    "5.4 Implement `revokeTokens(familyId: string): Promise<void>` that calls the Yoto token revocation endpoint and deletes the connection record regardless of revocation outcome; invalidates the media token hash so subsequent endpoint requests receive 401": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606448
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383013680
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383176267
+      }
+    ],
+    "5.5 Implement `ensureFreshToken(familyId: string): Promise<string>` — a lazy helper that checks `access_token_expires_at` and calls `refreshTokens` if the stored token is expired; returns the decrypted access token": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606472
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383014796
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383177506
+      }
+    ],
+    "5.6 Implement the 10-minute OAuth flow expiry check: export `isPendingFlowExpired(conn: YotoConnection): boolean` that compares `oauthExpiresAt` to `Date.now()`; call this in the callback route to invalidate stale flows": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606493
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383179163
+      }
+    ],
+    "6.1 Implement `deriveState(plan: PenniPlan, balanceMode: BalanceMode, opts?: { childDisplayName?: string }): YotoPresentationState` that derives `YotoPresentationState` exclusively from `PenniPlan` pot values, save goal progress, and `weeklyChangePence` (pass-through); never reads raw TrueLayer data": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606515
+      },
+      {
+        "executionId": "3755cd69-5bde-42d9-b81b-9d75259ac501",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1789244885015
+      }
+    ],
+    "6.2 Implement `deriveStateForFamily(familyId: string): YotoPresentationState | null` that reads `PenniPlan` from the server-side storage path and the family's `balanceMode` from the Connection Store; returns `null` if plan is unavailable, setting `activityPromptId` to `\"fallback\"` when returning a bare fallback object": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606536
+      }
+    ],
+    "6.3 Implement `serializeState(state: YotoPresentationState): string` (JSON.stringify wrapper) and `deserializeState(json: string): YotoPresentationState | { errorType: string; message: string }` with full schema validation; return a structured error — never a partial object — on invalid input": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606554
+      },
+      {
+        "executionId": "3755cd69-5bde-42d9-b81b-9d75259ac501",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1789244889152
+      }
+    ],
+    "7.1 Implement `generateIcon(goalProgressPercent: number | undefined): Buffer` using `pngjs` to produce a 16×16 32-bit RGBA PNG": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606605
+      },
+      {
+        "executionId": "3755cd69-5bde-42d9-b81b-9d75259ac501",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1789244889788
+      }
+    ],
+    "8.1 Define the `TTSAdapter` interface: `synthesize(script: string): Promise<Buffer>`": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606633
+      },
+      {
+        "executionId": "3755cd69-5bde-42d9-b81b-9d75259ac501",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1789244907672
+      },
+      {
+        "executionId": "3755cd69-5bde-42d9-b81b-9d75259ac501",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1789245108456
+      }
+    ],
+    "8.2 Implement `ElevenLabsAdapter` that POSTs to `https://api.elevenlabs.io/v1/text-to-speech/{voiceId}` with `output_format: mp3_44100_64`, reads `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` env vars, and returns the response body as a `Buffer`": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606654
+      }
+    ],
+    "8.3 Implement `ScriptedFallbackAdapter` that reads and returns the pre-recorded asset at `public/yoto/fallback.mp3`; if the file is absent, throw a descriptive error (caller handles as 503)": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606675
+      }
+    ],
+    "8.4 Implement `getScriptForChapter(chapter: \"update\" | \"changed\" | \"moment\", state: YotoPresentationState): string` that generates the appropriate spoken script per chapter, respecting `balanceMode` (never includes a currency value when `hidden`; expresses as \"about £X\" when `rounded`; as \"£X.XX\" when `exact`)": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606696
+      }
+    ],
+    "8.5 Implement `getTTSAdapter(): TTSAdapter` factory that reads `TTS_PROVIDER` env var; returns `ElevenLabsAdapter` when set to `\"elevenlabs\"` and `ELEVENLABS_API_KEY` is present; otherwise returns `ScriptedFallbackAdapter`": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606718
+      }
+    ],
+    "9.1 Implement `buildPlaylistPayload(origin: string, mediaToken: string): object` that constructs the Yoto card/playlist payload with exactly three chapters (`01-update`, `02-changed`, `03-moment`), setting `url` to the Audio Endpoint and `display.icon16x16` to the Icon Endpoint using the opaque `mediaToken` — no family IDs, child names, or PII in URLs": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606738
+      }
+    ],
+    "9.2 Implement `createOrUpdatePlaylist(familyId: string, origin: string): Promise<{ playlistId: string }>` that calls `ensureFreshToken`, then either POSTs to create (if no `playlistId` in Connection Store) or PUTs to update (if one exists); stores returned content ID in Connection Store; does not overwrite an existing content ID on error": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606760
+      }
+    ],
+    "10.1 Create `app/api/yoto/auth-link/route.ts` (GET handler) that calls `buildAuthUrl`, stores `state` and `codeVerifier` in an `httpOnly` session cookie with 10-minute `maxAge`, and redirects to the Yoto authorization URL — mirror the pattern in `app/api/auth-link/route.ts`": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606781
+      }
+    ],
+    "10.2 Create `app/api/yoto/callback/route.ts` (GET handler) that validates the `state` query param against the cookie, validates `error` param, checks for flow expiry via `isPendingFlowExpired`, calls `exchangeCode`, clears PKCE cookie, and redirects to `/settings?yoto=connected` on success or `/settings?yoto=error&reason={reason}` on failure": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606803
+      }
+    ],
+    "10.3 Create `app/api/yoto/status/route.ts` (GET handler) that reads the family's connection record and returns `{ status, yotoAccountId, balanceMode, playlistId }` — no token values in the response": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606853
+      }
+    ],
+    "10.4 Create `app/api/yoto/playlist/route.ts` (POST handler) that calls `createOrUpdatePlaylist` and returns `{ playlistId }` on success or a user-facing error; validates that connection status is `connected` or `connected_no_playlist` before proceeding": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606886
+      }
+    ],
+    "10.5 Create `app/api/yoto/balance-mode/route.ts` (PUT handler) that validates the `{ balanceMode }` body against the enum, persists it to the Connection Store, and triggers `deriveStateForFamily` to refresh the presentation state if a playlist exists": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606909
+      }
+    ],
+    "10.6 Create `app/api/yoto/connection/route.ts` (DELETE handler) that accepts an optional `{ deletePlaylist: boolean }` body; revokes tokens via `revokeTokens`; optionally calls the Yoto API to delete the card; deletes the local connection record regardless; sets status to `not_connected`": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606935
+      }
+    ],
+    "11.1 Create the route file with a GET handler that extracts `token` and `chapter` from the dynamic path segments": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606960
+      }
+    ],
+    "11.2 Wire chapter response logic:": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381606981
+      }
+    ],
+    "12.1 Create the route file with a GET handler that extracts `token` from the dynamic path segment": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381607005
+      }
+    ],
+    "13.1 Add a placeholder `public/yoto/moment.mp3` (a minimal valid silent MP3) and `public/yoto/fallback.mp3` so routes do not 503 before real assets are produced; document in a `public/yoto/README.md` that these should be replaced with real recordings before production": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381607028
+      }
+    ],
+    "14. Checkpoint — core services and routes": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381607085
+      }
+    ],
+    "15.1 Create `app/yoto/settings/page.tsx` as a client component (`\"use client\"`) that fetches `/api/yoto/status` on mount and renders exactly one of the six connection state panels based on `ConnectionStatus`": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381607107
+      }
+    ],
+    "15.2 Wire up all action handlers:": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381607130
+      }
+    ],
+    "15.3 Add a \"Yoto\" link or section to the existing `app/settings/page.tsx` (or navigation) pointing to `/yoto/settings` so parents can discover and reach the Yoto panel": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381607154
+      }
+    ],
+    "16. Final checkpoint — full integration": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788381607178
+      }
+    ],
+    "2. Define shared Yoto types (`lib/yoto/types.ts`)": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382234746
+      }
+    ],
+    "3. Implement crypto utilities (`lib/yoto/crypto.ts`)": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382320447
+      }
+    ],
+    "3.6 Write property tests for crypto utilities (`lib/yoto/__tests__/crypto.pbt.ts`)": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788382328940
+      },
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383004960
+      }
+    ],
+    "4. Implement Connection Store (`lib/yoto/db.ts`)": [
+      {
+        "executionId": "85778105-35bf-4e7f-a29d-867ca70da368",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1788383006244
+      }
+    ],
+    "7. Implement Icon Generator (`lib/yoto/icon.ts`)": [
+      {
+        "executionId": "3755cd69-5bde-42d9-b81b-9d75259ac501",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1789244889831
+      }
+    ],
+    "5. Implement OAuth Service (`lib/yoto/oauth.ts`)": [
+      {
+        "executionId": "3755cd69-5bde-42d9-b81b-9d75259ac501",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1789244896225
+      }
+    ],
+    "6. Implement Presentation Service (`lib/yoto/presentation.ts`)": [
+      {
+        "executionId": "3755cd69-5bde-42d9-b81b-9d75259ac501",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1789244896595
+      }
+    ],
+    "8. Implement TTS Adapter (`lib/yoto/tts.ts`)": [
+      {
+        "executionId": "3755cd69-5bde-42d9-b81b-9d75259ac501",
+        "chatSessionId": "sess_5c4e389c-0d4f-433e-b0af-9897a0e4762f",
+        "timestamp": 1789245109019
+      }
+    ]
+  }
+}
