@@ -1,5 +1,5 @@
 import type { HistoryEntry, PenniPlan, PenniSplit, SaveGoal, StoredBalance } from "./types";
-import { allocateSaveGoals, roundMoney, splitAmount } from "./money";
+import { allocateSaveGoals, splitAmount } from "./money";
 
 // ── Storage keys ──────────────────────────────────────────────
 
@@ -141,6 +141,7 @@ export function writeBalance(balance: StoredBalance): void {
 
 export function writePlan(plan: PenniPlan): void {
   localStorage.setItem(KEYS.plan, JSON.stringify(plan));
+  void syncYotoPresentation(plan);
 }
 
 export function writeSplit(split: PenniSplit): void {
@@ -154,6 +155,23 @@ export function appendHistory(entry: HistoryEntry): void {
     localStorage.setItem(KEYS.history, JSON.stringify(next));
   } catch {
     // Non-critical — ignore silently
+  }
+}
+
+export async function syncYotoPresentation(
+  plan: PenniPlan,
+  weeklyChangePence?: number
+): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  try {
+    await fetch("/api/yoto/presentation", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan, weeklyChangePence }),
+    });
+  } catch {
+    // Best-effort sync: the parent UI can still work if Yoto is not configured.
   }
 }
 

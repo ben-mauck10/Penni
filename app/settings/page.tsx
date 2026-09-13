@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { allocateSaveGoals, roundMoney, splitAmount } from "../../lib/money";
+import { allocateSaveGoals, splitAmount } from "../../lib/money";
 import {
   DEFAULT_SPLIT,
   readBalance,
@@ -271,6 +271,22 @@ export default function SettingsPage() {
           {splitError && (
             <span className="settings-error" role="alert">{splitError}</span>
           )}
+        </section>
+
+        <section className="settings-section" aria-labelledby="connections-heading">
+          <h2 id="connections-heading">Connections</h2>
+          <p className="settings-desc">
+            Connect services that can use your child-safe Penni updates.
+          </p>
+          <div>
+            <Link
+              href="/yoto/settings"
+              className="settings-save-btn"
+              style={{ textDecoration: "none", display: "inline-flex" }}
+            >
+              Yoto settings
+            </Link>
+          </div>
         </section>
 
         <div className="settings-actions">
