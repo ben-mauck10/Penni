@@ -1,10 +1,8 @@
-// Audio Endpoint — serves synthesised or static MP3 audio for Yoto card chapters.
+// Audio Endpoint — serves synthesised MP3 audio for Yoto card chapters.
 // Authenticated via an opaque media token (hashed, never logged).
 
 export const runtime = "nodejs";
 
-import fs from "fs";
-import path from "path";
 import { hashToken } from "@/lib/yoto/crypto";
 import { getDb, rowToConnection } from "@/lib/yoto/db";
 import { deriveStateForFamily } from "@/lib/yoto/presentation";
@@ -62,26 +60,10 @@ export async function GET(
 
   // 11.2 — Chapter response logic
 
-  // ── Chapter 3: static moment asset ───────────────────────────────────────
-  if (chapter === "moment") {
-    const momentPath = path.join(process.cwd(), "public", "yoto", "moment.mp3");
-    try {
-      const buffer = fs.readFileSync(momentPath);
-      return new Response(responseBody(buffer), { status: 200, headers: AUDIO_HEADERS });
-    } catch {
-      const correlationId = crypto.randomUUID();
-      console.error({ errorType: "moment_asset_missing", correlationId, status: 503 });
-      return new Response(null, { status: 503, headers: PRIVATE_NO_STORE });
-    }
-  }
+  // ── Chapters: TTS-synthesised speech ──────────────────────────────────────
 
-  // ── Chapters 1 & 2: TTS-synthesised speech ────────────────────────────────
-
-  // NOTE: deriveStateForFamily calls readPlan() from lib/storage, which guards
-  // against server-side execution with `typeof window === "undefined"` — it will
-  // always return null in this Node.js API route. This endpoint will therefore
-  // respond 503 until the architecture evolves to persist plan data server-side
-  // (e.g. in the SQLite DB). This behaviour is intentional for the current MVP.
+  // Use the last synced presentation state. If the parent has not yet synced
+  // one, deriveStateForFamily returns a generic hidden-balance fallback state.
   const state = deriveStateForFamily(familyId);
   if (!state) {
     const correlationId = crypto.randomUUID();
@@ -91,7 +73,6 @@ export async function GET(
 
   const script = getScriptForChapter(chapter, state);
 
-  // Attempt live TTS synthesis; fall back to static fallback.mp3 on failure.
   try {
     const mp3Buffer = await getTTSAdapter().synthesize(script);
     return new Response(responseBody(mp3Buffer), { status: 200, headers: AUDIO_HEADERS });
@@ -102,15 +83,6 @@ export async function GET(
         ? (err as { errorType: string }).errorType
         : "tts_error";
     console.error({ errorType, correlationId, status: 503 });
-
-    // Attempt to serve the static fallback asset.
-    const fallbackPath = path.join(process.cwd(), "public", "yoto", "fallback.mp3");
-    try {
-      const fallbackBuffer = fs.readFileSync(fallbackPath);
-      return new Response(responseBody(fallbackBuffer), { status: 200, headers: AUDIO_HEADERS });
-    } catch {
-      console.error({ errorType: "fallback_asset_missing", correlationId, status: 503 });
-      return new Response(null, { status: 503, headers: PRIVATE_NO_STORE });
-    }
+    return new Response(null, { status: 503, headers: PRIVATE_NO_STORE });
   }
 }

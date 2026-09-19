@@ -1,9 +1,11 @@
 # Yoto Static Audio Assets
 
-## moment.mp3
-Chapter 3 "Family money moment" audio. Replace with a real recording before production.
+These files are old development placeholders and should not be used in
+production. The Yoto audio route now requires live TTS:
 
-## fallback.mp3
-Fallback audio served when the Penni server cannot derive current state. Replace with a real recording before production.
+- `TTS_PROVIDER=elevenlabs`
+- `ELEVENLABS_API_KEY=<your ElevenLabs key>`
+- `ELEVENLABS_VOICE_ID=<optional voice id>`
 
-Both files are placeholder silent MP3s used for development only.
+If live TTS is not configured, the audio route returns `503` rather than
+serving a silent placeholder that makes the card skip chapters.

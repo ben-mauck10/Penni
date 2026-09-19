@@ -38,4 +38,10 @@ describe("getScriptForChapter", () => {
       })
     ).toContain("£12.34");
   });
+
+  it("speaks a non-empty family money moment", () => {
+    expect(getScriptForChapter("moment", baseState)).toContain(
+      "Family money moment"
+    );
+  });
 });

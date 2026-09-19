@@ -1,8 +1,6 @@
 // TTS Adapter — text-to-speech synthesis for Yoto card chapters.
-// Supports ElevenLabs (live) and a static fallback MP3.
+// Production audio requires a live TTS provider.
 
-import fs from "fs";
-import path from "path";
 import type { YotoPresentationState } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -32,9 +30,12 @@ export class ElevenLabsAdapter implements TTSAdapter {
   }
 
   async synthesize(script: string): Promise<Buffer> {
-    const url = `https://api.elevenlabs.io/v1/text-to-speech/${this.voiceId}`;
+    const url = new URL(
+      `https://api.elevenlabs.io/v1/text-to-speech/${this.voiceId}`
+    );
+    url.searchParams.set("output_format", "mp3_22050_32");
 
-    const response = await fetch(url, {
+    const response = await fetch(url.toString(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -42,8 +43,7 @@ export class ElevenLabsAdapter implements TTSAdapter {
       },
       body: JSON.stringify({
         text: script,
-        model_id: "eleven_monolingual_v1",
-        output_format: "mp3_44100_64",
+        model_id: "eleven_turbo_v2_5",
       }),
     });
 
@@ -69,15 +69,11 @@ export class ElevenLabsAdapter implements TTSAdapter {
 
 export class ScriptedFallbackAdapter implements TTSAdapter {
   async synthesize(): Promise<Buffer> {
-    const filePath = path.join(process.cwd(), "public", "yoto", "fallback.mp3");
-    try {
-      return fs.readFileSync(filePath);
-    } catch {
-      throw {
-        errorType: "fallback_asset_missing",
-        message: "public/yoto/fallback.mp3 is missing",
-      };
-    }
+    throw {
+      errorType: "tts_provider_unconfigured",
+      message:
+        "Set TTS_PROVIDER=elevenlabs and ELEVENLABS_API_KEY before serving Yoto audio.",
+    };
   }
 }
 
@@ -87,16 +83,14 @@ export class ScriptedFallbackAdapter implements TTSAdapter {
 
 /**
  * Derives the spoken TTS script for a given Yoto chapter from the
- * current `YotoPresentationState`. Returns an empty string for the
- * `"moment"` chapter (served as a static asset).
+ * current `YotoPresentationState`.
  */
 export function getScriptForChapter(
   chapter: "update" | "changed" | "moment",
   state: YotoPresentationState
 ): string {
   if (chapter === "moment") {
-    // Static asset served directly — no spoken script needed.
-    return "";
+    return "Family money moment. Pick one thing you might save for, one thing you might spend on, and one kind thing you could give.";
   }
 
   const name = state.childDisplayName ? ` ${state.childDisplayName}` : "";
@@ -162,8 +156,8 @@ export function getScriptForChapter(
 
 /**
  * Returns an `ElevenLabsAdapter` when `TTS_PROVIDER=elevenlabs` **and**
- * `ELEVENLABS_API_KEY` is set. Otherwise falls back to
- * `ScriptedFallbackAdapter`.
+ * `ELEVENLABS_API_KEY` is set. Otherwise returns an adapter that raises a
+ * clear configuration error instead of serving placeholder audio.
  */
 export function getTTSAdapter(): TTSAdapter {
   if (
