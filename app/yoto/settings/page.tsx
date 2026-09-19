@@ -66,6 +66,12 @@ function getYotoQueryMessage(): string | null {
   }
 }
 
+function hasYotoQueryError(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("yoto") === "error";
+}
+
 // ── Sub-components ────────────────────────────────────────────
 
 function Spinner() {
@@ -394,7 +400,9 @@ export default function YotoSettingsPage() {
         return;
       }
       setStatusData(body as YotoStatus);
-      setErrorMessage(null);
+      if (!hasYotoQueryError()) {
+        setErrorMessage(null);
+      }
     } catch {
       setErrorMessage("Something went wrong. Please try again.");
     }
@@ -548,7 +556,13 @@ export default function YotoSettingsPage() {
 
           {status === "not_connected" && <NotConnectedPanel />}
 
-          {status === "connecting" && <ConnectingPanel />}
+          {status === "connecting" && (
+            errorMessage ? (
+              <NotConnectedPanel />
+            ) : (
+              <ConnectingPanel />
+            )
+          )}
 
           {status === "connected_no_playlist" && (
             <ConnectedNoPlaylistPanel

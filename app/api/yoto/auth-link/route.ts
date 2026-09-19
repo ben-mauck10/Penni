@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildAuthUrl, isPendingFlowExpired } from "../../../../lib/yoto/oauth";
+import { buildAuthUrl } from "../../../../lib/yoto/oauth";
 import {
   clearPendingOAuth,
   getConnection,
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     const familyId = getFamilyId();
     const existing = getConnection(familyId);
 
-    if (existing && existing.status === "connecting" && isPendingFlowExpired(existing)) {
+    if (existing && existing.status === "connecting") {
       clearPendingOAuth(familyId, "not_connected");
     } else if (
       existing &&
