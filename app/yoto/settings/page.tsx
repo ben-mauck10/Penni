@@ -36,6 +36,36 @@ function extractErrorMessage(body: unknown): string {
   return "Something went wrong. Please try again.";
 }
 
+function getYotoQueryMessage(): string | null {
+  if (typeof window === "undefined") return null;
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("yoto") !== "error") return null;
+
+  const reason = params.get("reason");
+  switch (reason) {
+    case "denied":
+      return "Yoto connection was cancelled before access was granted.";
+    case "expired":
+      return "The Yoto connection attempt expired. Please try connecting again.";
+    case "state_mismatch":
+    case "no_session":
+      return "Yoto connection session could not be verified. Please start again from this page.";
+    case "exchange_http_400":
+      return "Yoto rejected the connection callback. Check the production redirect URL and selected scopes in the Yoto developer dashboard.";
+    case "exchange_http_401":
+      return "Yoto rejected the client credentials. Check that Vercel has the current rotated Yoto client secret.";
+    case "exchange_http_403":
+      return "Yoto rejected this app's permissions. Check the app type and scopes in the Yoto developer dashboard.";
+    case "exchange_failed":
+      return "Yoto connection failed while exchanging the login code. Check Vercel function logs for /api/yoto/callback.";
+    default:
+      return reason
+        ? `Yoto connection failed (${reason}). Check Vercel function logs for /api/yoto/callback.`
+        : "Yoto connection failed. Please try again.";
+  }
+}
+
 // ── Sub-components ────────────────────────────────────────────
 
 function Spinner() {
@@ -371,6 +401,10 @@ export default function YotoSettingsPage() {
   }, []);
 
   useEffect(() => {
+    const queryMessage = getYotoQueryMessage();
+    if (queryMessage) {
+      setErrorMessage(queryMessage);
+    }
     void fetchStatus();
   }, [fetchStatus]);
 

@@ -153,9 +153,9 @@ export async function exchangeCode(
   }
 
   if (!response.ok) {
-    // Read status/statusText only — never log the response body which may contain tokens.
+    // Never log the response body here; it may contain sensitive auth details.
     throw {
-      errorType: "exchange_failed",
+      errorType: `exchange_http_${response.status}`,
       message: `Authorization code exchange failed (HTTP ${response.status}). Please try connecting again.`,
     };
   }

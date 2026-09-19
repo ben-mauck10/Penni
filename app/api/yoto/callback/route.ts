@@ -17,6 +17,17 @@ function errorRedirect(reason: string, origin: string): NextResponse {
   );
 }
 
+function errorReason(error: unknown): string {
+  if (error && typeof error === "object" && "errorType" in error) {
+    const errorType = String((error as { errorType: unknown }).errorType);
+    if (/^[a-z0-9_]+$/.test(errorType)) {
+      return errorType;
+    }
+  }
+
+  return "exchange_failed";
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const origin = url.origin;
@@ -84,11 +95,11 @@ export async function GET(req: Request) {
     if (conn) {
       clearPendingOAuth(familyId);
     }
-  } catch {
+  } catch (error) {
     if (conn) {
       clearPendingOAuth(familyId, "not_connected");
     }
-    return errorRedirect("exchange_failed", origin);
+    return errorRedirect(errorReason(error), origin);
   }
 
   // Success — clear the PKCE cookie and redirect.
