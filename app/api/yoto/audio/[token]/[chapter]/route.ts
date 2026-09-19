@@ -3,7 +3,7 @@
 
 export const runtime = "nodejs";
 
-import { hashToken } from "@/lib/yoto/crypto";
+import { hashToken, verifySignedMediaToken } from "@/lib/yoto/crypto";
 import { getDb, rowToConnection } from "@/lib/yoto/db";
 import { deriveStateForFamily } from "@/lib/yoto/presentation";
 import { getScriptForChapter, getTTSAdapter } from "@/lib/yoto/tts";
@@ -45,18 +45,19 @@ export async function GET(
     .prepare("SELECT * FROM yoto_connections WHERE media_token_hash = ?")
     .get(hash) as Record<string, unknown> | undefined;
 
-  if (!row) {
-    // Return 401 without body; no distinction between missing vs. invalid token.
-    return new Response(null, { status: 401, headers: PRIVATE_NO_STORE });
-  }
-
   // Validate the chapter parameter.
   if (!isValidChapter(chapter)) {
     return new Response(null, { status: 404, headers: PRIVATE_NO_STORE });
   }
 
-  const connection = rowToConnection(row);
-  const familyId = connection.familyId;
+  const familyId = row
+    ? rowToConnection(row).familyId
+    : verifySignedMediaToken(token);
+
+  if (!familyId) {
+    // Return 401 without body; no distinction between missing vs. invalid token.
+    return new Response(null, { status: 401, headers: PRIVATE_NO_STORE });
+  }
 
   // 11.2 — Chapter response logic
 

@@ -3,7 +3,7 @@
 
 import { ensureFreshToken } from "./oauth";
 import { getConnection, upsertConnection } from "./db";
-import { generateSecureToken, hashToken } from "./crypto";
+import { createSignedMediaToken, hashToken } from "./crypto";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -216,27 +216,10 @@ export async function createOrUpdatePlaylist(
   // Step 2: Read the current connection record.
   const conn = getConnection(familyId);
 
-  // Step 3: Resolve or generate the Media Access Token.
-  //  - Only the hash is persisted; the plaintext is used only in playlist URLs.
-  let mediaToken: string;
-
-  if (!conn?.mediaTokenHash) {
-    // No token yet — generate one and store only its hash.
-    mediaToken = generateSecureToken(16); // ≥128 bits of entropy
-    upsertConnection({ familyId, mediaTokenHash: hashToken(mediaToken) });
-  } else {
-    // A token already exists but we never stored the plaintext.
-    // We must regenerate a fresh token and re-embed it in the playlist so that
-    // the stored hash reflects the token in the live playlist URLs.
-    // The new hash atomically replaces the old one after the API call succeeds
-    // (see Step 6 below where we write to DB only on success).
-    //
-    // If there is already a playlistId the existing token's URLs are still
-    // valid until we push the updated playlist; we update the hash at the same
-    // time as the successful PUT so there is never a window where the URL token
-    // doesn't match the stored hash.
-    mediaToken = generateSecureToken(16);
-  }
+  // Step 3: Build a stateless, signed Media Access Token. Vercel's /tmp SQLite
+  // file can disappear between Yoto playlist creation and later card playback,
+  // so audio/icon routes must be able to validate URLs without DB token state.
+  const mediaToken = createSignedMediaToken(familyId);
 
   // Step 4: Build the payload.
   const payload = buildPlaylistPayload(origin, mediaToken);

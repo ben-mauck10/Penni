@@ -5,9 +5,16 @@
  * Validates: Requirements 1.4, 1.6, 1.8
  */
 
-import { describe, it, beforeAll } from "vitest";
+import { describe, expect, it, beforeAll } from "vitest";
 import * as fc from "fast-check";
-import { generateSecureToken, buildPkceParams, encryptToken, decryptToken } from "../crypto";
+import {
+  buildPkceParams,
+  createSignedMediaToken,
+  decryptToken,
+  encryptToken,
+  generateSecureToken,
+  verifySignedMediaToken,
+} from "../crypto";
 
 // Set a fixed 64-char hex key so AES-256-GCM is available in all tests.
 // This key is for testing only and must never be used in production.
@@ -69,5 +76,17 @@ describe("Property 9: Encrypt then decrypt is identity", () => {
       }),
       { numRuns: 100 }
     );
+  });
+});
+
+describe("Signed media tokens", () => {
+  it("verifies a token back to its family id", () => {
+    const token = createSignedMediaToken("test-family");
+    expect(verifySignedMediaToken(token)).toBe("test-family");
+  });
+
+  it("rejects tampered tokens", () => {
+    const token = createSignedMediaToken("test-family");
+    expect(verifySignedMediaToken(`${token}x`)).toBeNull();
   });
 });

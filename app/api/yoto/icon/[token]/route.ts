@@ -3,7 +3,7 @@
 
 export const runtime = "nodejs";
 
-import { hashToken } from "@/lib/yoto/crypto";
+import { hashToken, verifySignedMediaToken } from "@/lib/yoto/crypto";
 import { getDb, rowToConnection } from "@/lib/yoto/db";
 import { deriveStateForFamily } from "@/lib/yoto/presentation";
 import { generateIcon } from "@/lib/yoto/icon";
@@ -31,21 +31,19 @@ export async function GET(
     .prepare("SELECT * FROM yoto_connections WHERE media_token_hash = ?")
     .get(hash) as Record<string, unknown> | undefined;
 
-  if (!row) {
+  const familyId = row
+    ? rowToConnection(row).familyId
+    : verifySignedMediaToken(token);
+
+  if (!familyId) {
     // Return 401 without body; no distinction between missing vs. invalid token.
     return new Response(null, { status: 401, headers: PRIVATE_NO_STORE });
   }
 
-  const connection = rowToConnection(row);
-  const familyId = connection.familyId;
-
   // Derive presentation state for this family.
   //
-  // NOTE: deriveStateForFamily calls readPlan() from lib/storage, which guards
-  // against server-side execution with `typeof window === "undefined"` — it will
-  // always return null in this Node.js API route. This endpoint will therefore
-  // respond 503 until the architecture evolves to persist plan data server-side
-  // (e.g. in the SQLite DB). This behaviour is intentional for the current MVP.
+  // Use the last synced presentation state. If the parent has not yet synced
+  // one, deriveStateForFamily returns a generic hidden-balance fallback state.
   const state = deriveStateForFamily(familyId);
   if (!state) {
     const correlationId = crypto.randomUUID();

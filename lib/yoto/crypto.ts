@@ -12,6 +12,10 @@ function toBase64url(base64: string): string {
   return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+function fromBase64url(value: string): Buffer {
+  return Buffer.from(value.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+}
+
 /**
  * Reads and validates YOTO_ENCRYPTION_KEY from the environment.
  * Must be a 64-character hex string representing 32 bytes.
@@ -56,6 +60,61 @@ export function generateSecureToken(bytes = 32): string {
  */
 export function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+// ---------------------------------------------------------------------------
+// 3.2b — signed media tokens
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates a stateless token for Yoto media URLs.
+ *
+ * The family ID is encoded, then signed with HMAC-SHA256 using the same
+ * 32-byte deployment secret as OAuth token encryption. This avoids depending
+ * on Vercel's temporary SQLite file for Yoto's later audio/icon requests.
+ */
+export function createSignedMediaToken(familyId: string): string {
+  const payload = toBase64url(Buffer.from(familyId, "utf8").toString("base64"));
+  const signature = crypto
+    .createHmac("sha256", getEncryptionKey())
+    .update(payload)
+    .digest("base64url");
+
+  return `v1.${payload}.${signature}`;
+}
+
+/**
+ * Verifies a stateless Yoto media URL token.
+ *
+ * Returns the family ID when the token is valid, otherwise `null`.
+ */
+export function verifySignedMediaToken(token: string): string | null {
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts[0] !== "v1") {
+    return null;
+  }
+
+  const [, payload, signature] = parts;
+  const expected = crypto
+    .createHmac("sha256", getEncryptionKey())
+    .update(payload)
+    .digest("base64url");
+
+  const signatureBytes = Buffer.from(signature);
+  const expectedBytes = Buffer.from(expected);
+  if (
+    signatureBytes.length !== expectedBytes.length ||
+    !crypto.timingSafeEqual(signatureBytes, expectedBytes)
+  ) {
+    return null;
+  }
+
+  try {
+    const familyId = fromBase64url(payload).toString("utf8");
+    return familyId.length > 0 ? familyId : null;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
