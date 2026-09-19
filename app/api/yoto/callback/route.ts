@@ -52,24 +52,24 @@ export async function GET(req: Request) {
   const familyId = getFamilyId();
   const conn = getConnection(familyId);
 
-  if (!conn?.oauthState || !conn.oauthCodeVerifier) {
-    return errorRedirect("no_session", origin);
-  }
-
-  if (
-    conn.oauthState !== pkce.state ||
-    conn.oauthCodeVerifier !== pkce.codeVerifier ||
-    conn.oauthState !== returnedState
-  ) {
-    clearPendingOAuth(familyId, "not_connected");
-    return errorRedirect("state_mismatch", origin);
+  if (conn?.oauthState || conn?.oauthCodeVerifier) {
+    if (
+      conn.oauthState !== pkce.state ||
+      conn.oauthCodeVerifier !== pkce.codeVerifier ||
+      conn.oauthState !== returnedState
+    ) {
+      clearPendingOAuth(familyId, "not_connected");
+      return errorRedirect("state_mismatch", origin);
+    }
   }
 
   if (conn && isPendingFlowExpired(conn)) {
     clearPendingOAuth(familyId, "not_connected");
     return errorRedirect("expired", origin);
   } else if (new Date(pkce.expiresAt).getTime() < Date.now()) {
-    clearPendingOAuth(familyId, "not_connected");
+    if (conn) {
+      clearPendingOAuth(familyId, "not_connected");
+    }
     return errorRedirect("expired", origin);
   }
 
@@ -81,9 +81,13 @@ export async function GET(req: Request) {
 
   try {
     await exchangeCode(code, pkce.codeVerifier, familyId, origin);
-    clearPendingOAuth(familyId);
+    if (conn) {
+      clearPendingOAuth(familyId);
+    }
   } catch {
-    clearPendingOAuth(familyId, "not_connected");
+    if (conn) {
+      clearPendingOAuth(familyId, "not_connected");
+    }
     return errorRedirect("exchange_failed", origin);
   }
 
