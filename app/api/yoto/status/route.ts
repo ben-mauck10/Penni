@@ -8,6 +8,28 @@ import {
 
 export const runtime = "nodejs";
 
+function getStatusErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "Failed to read Yoto connection status.";
+  }
+
+  if (error.message.includes("PENNI_FAMILY_ID")) {
+    return "Missing PENNI_FAMILY_ID in the deployment environment.";
+  }
+
+  if (
+    error.message.includes("SQLITE") ||
+    error.message.includes("database") ||
+    error.message.includes("readonly") ||
+    error.message.includes("permission") ||
+    error.message.includes("no such file")
+  ) {
+    return "Could not open the Yoto connection database. Check YOTO_DB_PATH is set to /tmp/yoto.db and redeploy.";
+  }
+
+  return "Failed to read Yoto connection status. Check Vercel runtime logs for /api/yoto/status.";
+}
+
 export async function GET() {
   try {
     const familyId = getFamilyId();
@@ -41,9 +63,12 @@ export async function GET() {
       playlistId: conn.playlistId,
     });
   } catch (error) {
-    console.error("[yoto/status] Failed to read connection status", error);
+    console.error("[yoto/status] Failed to read connection status", {
+      errorType: error instanceof Error ? error.constructor.name : "unknown_error",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
     return NextResponse.json(
-      { error: "Failed to read Yoto connection status" },
+      { error: getStatusErrorMessage(error) },
       { status: 500 }
     );
   }
