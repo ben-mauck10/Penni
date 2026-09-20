@@ -58,7 +58,7 @@ function generateCorrelationId(): string {
  *
  * - `state` is derived from 16 CSPRNG bytes (128 bits), satisfying Requirement 1.4.
  * - `codeVerifier` is 43 URL-safe characters (32 random bytes → base64url).
- * - Scopes are limited to `user:content:manage offline_access` (Requirement 1.3 —
+ * - Scopes are limited to Yoto content/library access plus `offline_access` (Requirement 1.3 —
  *   `family:devices:control` is intentionally excluded).
  *
  * @param origin - The request origin (e.g. `https://penni.example.com`), used to
@@ -82,7 +82,8 @@ export function buildAuthUrl(
     response_type: "code",
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: "user:content:manage offline_access",
+    scope:
+      "user:content:manage user:content:view family:library:view offline_access",
     state,
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
