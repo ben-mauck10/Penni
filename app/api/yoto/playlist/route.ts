@@ -4,6 +4,23 @@ import { createOrUpdatePlaylist } from "../../../../lib/yoto/playlist";
 
 export const runtime = "nodejs";
 
+function playlistErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  return "Could not create or update the Yoto playlist. Please try again.";
+}
+
 export async function POST() {
   try {
     const familyId = getFamilyId();
@@ -27,8 +44,7 @@ export async function POST() {
     console.error("[yoto/playlist] Failed to create or update playlist", error);
     return NextResponse.json(
       {
-        error:
-          "Could not create or update the Yoto playlist. Please try again.",
+        error: playlistErrorMessage(error),
       },
       { status: 502 }
     );
