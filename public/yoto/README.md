@@ -1,10 +1,6 @@
 # Yoto Static Audio Assets
 
-These files provide the first simple Yoto card experience without requiring an
-external text-to-speech provider.
+These files are not used by the current playlist flow.
 
-- `update.wav`
-- `changed.wav`
-- `moment.wav`
-
-The older `.mp3` and `.aiff` files are not used by the playlist.
+Yoto card creation now uses the Yoto Labs text-to-speech job API, so Yoto
+generates and hosts the audio instead of streaming local files from Vercel.

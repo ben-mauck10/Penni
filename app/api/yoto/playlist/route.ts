@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { NextRequest } from "next/server";
 import { getFamilyId, getConnection } from "../../../../lib/yoto/db";
 import { createOrUpdatePlaylist } from "../../../../lib/yoto/playlist";
 
 export const runtime = "nodejs";
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     const familyId = getFamilyId();
     const conn = getConnection(familyId);
@@ -21,8 +20,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const origin = req.nextUrl.origin;
-    const { playlistId } = await createOrUpdatePlaylist(familyId, origin);
+    const { playlistId } = await createOrUpdatePlaylist(familyId);
 
     return NextResponse.json({ playlistId }, { status: 200 });
   } catch (error) {

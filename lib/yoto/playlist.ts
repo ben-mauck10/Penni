@@ -1,15 +1,17 @@
 // Playlist Service: creates and updates the "Penni Pig" Yoto MYO content.
-// Uses the Yoto content API (POST /content for create and update).
+// Uses Yoto Labs TTS so Yoto generates and hosts playable audio.
 
 import { ensureFreshToken } from "./oauth";
 import { getConnection, upsertConnection } from "./db";
-import { createSignedMediaToken, hashToken } from "./crypto";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const YOTO_API_URL = process.env.YOTO_API_URL ?? "https://api.yotoplay.com";
+const YOTO_LABS_API_URL =
+  process.env.YOTO_LABS_API_URL ?? "https://labs.api.yotoplay.com";
+const YOTO_LABS_VOICE_ID =
+  process.env.YOTO_LABS_VOICE_ID ?? "JBFqnCBsd6RMkjVDRZzb";
 
 /** Maximum number of attempts (initial try + 2 retries). */
 const MAX_ATTEMPTS = 3;
@@ -25,20 +27,10 @@ const MAX_BACKOFF_MS = 30_000;
 // ---------------------------------------------------------------------------
 
 /**
- * Constructs the Yoto card/playlist payload for the "Penni Pig" card.
- *
- * Contains exactly three chapters, each using `mediaToken` as an opaque
- * identifier in URL paths — no family IDs, child names, or PII.
- *
- * @param origin    - The public base URL of this Penni deployment (e.g. "https://penni.example.com").
- * @param mediaToken - The plaintext Media Access Token for this family.
- * @returns A plain object matching the Yoto card payload shape.
+ * Constructs a Yoto Labs text-to-speech payload for the "Penni Pig" card.
+ * The Labs API converts these text tracks into Yoto-hosted audio.
  */
-export function buildPlaylistPayload(
-  origin: string,
-  mediaToken: string
-): object {
-  const iconUrl = `${origin}/api/yoto/icon/${mediaToken}`;
+export function buildPlaylistPayload(): object {
   const chapters = [
     {
       key: "01-update",
@@ -47,20 +39,14 @@ export function buildPlaylistPayload(
         {
           key: "01-update-track",
           title: "My Penni update",
-          trackUrl: `${origin}/api/yoto/audio/${mediaToken}/update`,
-          format: "wav",
-          type: "stream",
-          uid: "",
-          duration: 30,
-          fileSize: 0,
-          channels: "mono",
+          trackUrl:
+            "Hello from Penni Pig. Your savings update is ready. Keep going, you are doing brilliantly.",
+          type: "elevenlabs",
           overlayLabel: "1",
-          display: { iconUrl16x16: iconUrl },
+          display: {},
         },
       ],
-      defaultTrackDisplay: null,
-      defaultTrackAmbient: null,
-      display: { iconUrl16x16: iconUrl },
+      display: {},
     },
     {
       key: "02-changed",
@@ -69,20 +55,14 @@ export function buildPlaylistPayload(
         {
           key: "02-changed-track",
           title: "What changed?",
-          trackUrl: `${origin}/api/yoto/audio/${mediaToken}/changed`,
-          format: "wav",
-          type: "stream",
-          uid: "",
-          duration: 30,
-          fileSize: 0,
-          channels: "mono",
+          trackUrl:
+            "What changed this week? Your Penni Pig card is ready to help you talk about saving, spending, and giving.",
+          type: "elevenlabs",
           overlayLabel: "2",
-          display: { iconUrl16x16: iconUrl },
+          display: {},
         },
       ],
-      defaultTrackDisplay: null,
-      defaultTrackAmbient: null,
-      display: { iconUrl16x16: iconUrl },
+      display: {},
     },
     {
       key: "03-moment",
@@ -91,20 +71,14 @@ export function buildPlaylistPayload(
         {
           key: "03-moment-track",
           title: "Family money moment",
-          trackUrl: `${origin}/api/yoto/audio/${mediaToken}/moment`,
-          format: "wav",
-          type: "stream",
-          uid: "",
-          duration: 30,
-          fileSize: 0,
-          channels: "mono",
+          trackUrl:
+            "Family money moment. Pick one thing you might save for, one thing you might spend on, and one kind thing you could give.",
+          type: "elevenlabs",
           overlayLabel: "3",
-          display: { iconUrl16x16: iconUrl },
+          display: {},
         },
       ],
-      defaultTrackDisplay: null,
-      defaultTrackAmbient: null,
-      display: { iconUrl16x16: iconUrl },
+      display: {},
     },
   ];
 
@@ -112,14 +86,11 @@ export function buildPlaylistPayload(
     title: "Penni Pig",
     content: {
       chapters,
-      config: {
-        autoadvance: "next",
-        onlineOnly: true,
-        resumeTimeout: 0,
-      },
+      config: { resumeTimeout: 0 },
       playbackType: "linear",
     },
     metadata: {
+      title: "Penni Pig",
       description: "A child-friendly Penni Pig savings update.",
       category: "activities",
     },
@@ -194,9 +165,8 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
  * Creates or updates the "Penni Pig" Yoto card for the given family.
  *
  * - Obtains a fresh access token via `ensureFreshToken`.
- * - Provisions a Media Access Token if one does not yet exist (stores only
- *   its SHA-256 hash in the Connection Store — never the plaintext).
- * - POSTs to `/content`; includes `cardId` when updating existing content.
+ * - POSTs text tracks to the Yoto Labs TTS job API.
+ * - Includes `cardId` when updating existing content.
  * - Retries on network failures and 5xx responses with exponential back-off
  *   (initial 1 s, doubling each attempt, max 30 s, max 3 attempts total).
  * - On 4xx errors: throws `{ errorType: "playlist_api_error" }` without
@@ -207,8 +177,7 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
  * @returns `{ playlistId }` — the Yoto card ID stored in the Connection Store.
  */
 export async function createOrUpdatePlaylist(
-  familyId: string,
-  origin: string
+  familyId: string
 ): Promise<{ playlistId: string }> {
   // Step 1: Obtain a valid access token.
   const accessToken = await ensureFreshToken(familyId);
@@ -216,26 +185,21 @@ export async function createOrUpdatePlaylist(
   // Step 2: Read the current connection record.
   const conn = getConnection(familyId);
 
-  // Step 3: Build a stateless, signed Media Access Token. Vercel's /tmp SQLite
-  // file can disappear between Yoto playlist creation and later card playback,
-  // so audio/icon routes must be able to validate URLs without DB token state.
-  const mediaToken = createSignedMediaToken(familyId);
+  // Step 3: Build the Yoto Labs TTS payload.
+  const payload = buildPlaylistPayload() as Record<string, unknown>;
 
-  // Step 4: Build the payload.
-  const payload = buildPlaylistPayload(origin, mediaToken);
-
-  // Step 5: Call the Yoto API (with retry).
+  // Step 4: Call the Yoto Labs API (with retry).
   const existingPlaylistId = conn?.playlistId ?? null;
 
   const returnedPlaylistId = await withRetry(async () => {
-    const isCreate = !existingPlaylistId;
-    const url = `${YOTO_API_URL}/content`;
+    const url = new URL(`${YOTO_LABS_API_URL}/content/job`);
+    url.searchParams.set("voiceId", YOTO_LABS_VOICE_ID);
     const method = "POST";
-    const body = isCreate
-      ? payload
-      : { cardId: existingPlaylistId, ...payload };
+    const body = existingPlaylistId
+      ? { cardId: existingPlaylistId, ...payload }
+      : payload;
 
-    const response = await fetch(url, {
+    const response = await fetch(url.toString(), {
       method,
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -247,18 +211,24 @@ export async function createOrUpdatePlaylist(
     if (!response.ok) {
       const errorText = await response.text().catch(() => "(unreadable body)");
       throw new PlaylistApiError(
-        `Yoto API ${method} ${url} responded with ${response.status}: ${errorText}`,
+        `Yoto Labs API ${method} ${url.toString()} responded with ${response.status}: ${errorText}`,
         response.status
       );
     }
 
     const data = (await response.json()) as Record<string, unknown>;
+    const job = data.job as Record<string, unknown> | undefined;
     const card = data.card as Record<string, unknown> | undefined;
-    const id = (card?.cardId ?? data.cardId ?? data.id) as string | undefined;
+    const id = (card?.cardId ??
+      job?.cardId ??
+      job?.contentId ??
+      data.cardId ??
+      data.id ??
+      job?.jobId) as string | undefined;
 
     if (!id) {
       throw new PlaylistApiError(
-        `Yoto API response missing both 'id' and 'cardId' fields`,
+        `Yoto Labs API response missing jobId/cardId fields`,
         200
       );
     }
@@ -266,10 +236,9 @@ export async function createOrUpdatePlaylist(
     return id;
   });
 
-  // Step 6: Persist success — update hash + status + playlistId atomically.
+  // Step 5: Persist success.
   upsertConnection({
     familyId,
-    mediaTokenHash: hashToken(mediaToken),
     status: "playlist_ready",
     playlistId: returnedPlaylistId,
   });
