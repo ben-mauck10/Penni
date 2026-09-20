@@ -92,7 +92,7 @@ export function buildPlaylistPayload(): object {
     metadata: {
       title: "Penni Pig",
       description: "A child-friendly Penni Pig savings update.",
-      category: "activities",
+      category: "activity",
     },
   };
 }
