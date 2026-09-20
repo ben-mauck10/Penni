@@ -195,10 +195,67 @@ async function findPenniPigCardId(accessToken: string): Promise<string | null> {
   return typeof cardId === "string" && isCardId(cardId) ? cardId : null;
 }
 
+async function isCardAudioReady(
+  accessToken: string,
+  cardId: string
+): Promise<boolean | null> {
+  const response = await fetch(`${YOTO_API_URL}/content/${cardId}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as Record<string, unknown>;
+  const card = (data.card ?? data) as Record<string, unknown>;
+  const content = card.content as Record<string, unknown> | undefined;
+  const chapters = content?.chapters;
+  if (!Array.isArray(chapters) || chapters.length === 0) {
+    return false;
+  }
+
+  for (const chapter of chapters) {
+    if (typeof chapter !== "object" || chapter === null) {
+      return false;
+    }
+
+    const tracks = (chapter as Record<string, unknown>).tracks;
+    if (!Array.isArray(tracks) || tracks.length === 0) {
+      return false;
+    }
+
+    for (const track of tracks) {
+      if (typeof track !== "object" || track === null) {
+        return false;
+      }
+
+      const trackObj = track as Record<string, unknown>;
+      if (trackObj.type === "elevenlabs") {
+        return false;
+      }
+      if (typeof trackObj.trackUrl !== "string" || trackObj.trackUrl.length === 0) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 async function waitForPenniPigCardId(accessToken: string): Promise<string | null> {
   for (let attempt = 0; attempt < 6; attempt++) {
     const cardId = await findPenniPigCardId(accessToken);
-    if (cardId) return cardId;
+    if (cardId) {
+      const audioReady = await isCardAudioReady(accessToken, cardId);
+      if (audioReady === true || audioReady === null) {
+        return cardId;
+      }
+    }
     await sleep(2_000);
   }
 
@@ -282,12 +339,16 @@ export async function createOrUpdatePlaylist(
     return { cardId: isCardId(cardId) ? cardId : null, jobId: jobId ?? null };
   });
 
-  const returnedPlaylistId =
-    returnedJob.cardId ?? (await waitForPenniPigCardId(accessToken));
+  let returnedPlaylistId: string | null = null;
+  if (returnedJob.cardId) {
+    const audioReady = await isCardAudioReady(accessToken, returnedJob.cardId);
+    returnedPlaylistId = audioReady === true ? returnedJob.cardId : null;
+  }
+  returnedPlaylistId ??= await waitForPenniPigCardId(accessToken);
 
   if (!returnedPlaylistId) {
     throw new PlaylistApiError(
-      "Yoto accepted the text-to-speech job, but the Penni Pig card is still being generated. Wait a minute, then check My Content in the Yoto app.",
+      "Yoto accepted the text-to-speech job, but the Penni Pig card audio is still being generated. Wait a minute, then click Test / regenerate again before linking it to a MYO card.",
       202
     );
   }
