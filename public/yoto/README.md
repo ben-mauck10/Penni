@@ -1,11 +1,10 @@
 # Yoto Static Audio Assets
 
-These files are old development placeholders and should not be used in
-production. The Yoto audio route now requires live TTS:
+These files provide the first simple Yoto card experience without requiring an
+external text-to-speech provider.
 
-- `TTS_PROVIDER=elevenlabs`
-- `ELEVENLABS_API_KEY=<your ElevenLabs key>`
-- `ELEVENLABS_VOICE_ID=<optional voice id>`
+- `update.aiff`
+- `changed.aiff`
+- `moment.aiff`
 
-If live TTS is not configured, the audio route returns `503` rather than
-serving a silent placeholder that makes the card skip chapters.
+The older `.mp3` files are tiny placeholders and are not used by the playlist.

@@ -1,12 +1,12 @@
-// Audio Endpoint — serves synthesised MP3 audio for Yoto card chapters.
+// Audio Endpoint — serves static spoken audio for Yoto card chapters.
 // Authenticated via an opaque media token (hashed, never logged).
 
 export const runtime = "nodejs";
 
+import fs from "fs";
+import path from "path";
 import { hashToken, verifySignedMediaToken } from "@/lib/yoto/crypto";
-import { getDb, rowToConnection } from "@/lib/yoto/db";
-import { deriveStateForFamily } from "@/lib/yoto/presentation";
-import { getScriptForChapter, getTTSAdapter } from "@/lib/yoto/tts";
+import { getDb } from "@/lib/yoto/db";
 
 // The valid chapter keys this endpoint accepts.
 const VALID_CHAPTERS = ["update", "changed", "moment"] as const;
@@ -18,7 +18,7 @@ function isValidChapter(c: string): c is ValidChapter {
 
 // Standard headers applied to every audio response.
 const AUDIO_HEADERS = {
-  "Content-Type": "audio/mpeg",
+  "Content-Type": "audio/aiff",
   "Cache-Control": "private, no-store",
 };
 
@@ -29,6 +29,12 @@ function responseBody(buffer: Buffer): ArrayBuffer {
   new Uint8Array(body).set(buffer);
   return body;
 }
+
+const STATIC_AUDIO_FILES: Record<ValidChapter, string> = {
+  update: "update.aiff",
+  changed: "changed.aiff",
+  moment: "moment.aiff",
+};
 
 export async function GET(
   _request: Request,
@@ -50,39 +56,28 @@ export async function GET(
     return new Response(null, { status: 404, headers: PRIVATE_NO_STORE });
   }
 
-  const familyId = row
-    ? rowToConnection(row).familyId
-    : verifySignedMediaToken(token);
+  const validMediaToken = row !== undefined || verifySignedMediaToken(token) !== null;
 
-  if (!familyId) {
+  if (!validMediaToken) {
     // Return 401 without body; no distinction between missing vs. invalid token.
     return new Response(null, { status: 401, headers: PRIVATE_NO_STORE });
   }
 
-  // 11.2 — Chapter response logic
-
-  // ── Chapters: TTS-synthesised speech ──────────────────────────────────────
-
-  // Use the last synced presentation state. If the parent has not yet synced
-  // one, deriveStateForFamily returns a generic hidden-balance fallback state.
-  const state = deriveStateForFamily(familyId);
-  if (!state) {
-    const correlationId = crypto.randomUUID();
-    console.error({ errorType: "state_unavailable", correlationId, status: 503 });
-    return new Response(null, { status: 503, headers: PRIVATE_NO_STORE });
-  }
-
-  const script = getScriptForChapter(chapter, state);
-
   try {
-    const mp3Buffer = await getTTSAdapter().synthesize(script);
-    return new Response(responseBody(mp3Buffer), { status: 200, headers: AUDIO_HEADERS });
+    const audioPath = path.join(
+      process.cwd(),
+      "public",
+      "yoto",
+      STATIC_AUDIO_FILES[chapter]
+    );
+    const audioBuffer = fs.readFileSync(audioPath);
+    return new Response(responseBody(audioBuffer), {
+      status: 200,
+      headers: AUDIO_HEADERS,
+    });
   } catch (err: unknown) {
     const correlationId = crypto.randomUUID();
-    const errorType =
-      err && typeof err === "object" && "errorType" in err
-        ? (err as { errorType: string }).errorType
-        : "tts_error";
+    const errorType = err instanceof Error ? err.constructor.name : "audio_error";
     console.error({ errorType, correlationId, status: 503 });
     return new Response(null, { status: 503, headers: PRIVATE_NO_STORE });
   }

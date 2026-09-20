@@ -39,7 +39,7 @@ describe("buildPlaylistPayload", () => {
         "https://penni.example.test/api/yoto/icon/opaque-media-token"
       );
       expect(chapter.tracks[0].type).toBe("stream");
-      expect(chapter.tracks[0].format).toBe("mp3");
+      expect(chapter.tracks[0].format).toBe("aiff");
       expect(chapter.tracks[0].trackUrl).toContain(
         "https://penni.example.test/api/yoto/audio/opaque-media-token/"
       );
