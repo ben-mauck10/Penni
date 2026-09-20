@@ -12,6 +12,8 @@ const YOTO_LABS_API_URL =
   process.env.YOTO_LABS_API_URL ?? "https://labs.api.yotoplay.com";
 const YOTO_LABS_VOICE_ID =
   process.env.YOTO_LABS_VOICE_ID ?? "JBFqnCBsd6RMkjVDRZzb";
+const YOTO_API_URL = process.env.YOTO_API_URL ?? "https://api.yotoplay.com";
+const PENNI_CARD_TITLE = "Penni Pig";
 
 /** Maximum number of attempts (initial try + 2 retries). */
 const MAX_ATTEMPTS = 3;
@@ -115,6 +117,10 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isCardId(value: string | null | undefined): value is string {
+  return /^[a-zA-Z0-9]{5}$/.test(value ?? "");
+}
+
 /**
  * Structured error thrown for non-retryable Yoto API errors (4xx).
  */
@@ -157,6 +163,48 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   throw lastError;
 }
 
+async function findPenniPigCardId(accessToken: string): Promise<string | null> {
+  const response = await fetch(`${YOTO_API_URL}/content/mine`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as { cards?: unknown };
+  if (!Array.isArray(data.cards)) {
+    return null;
+  }
+
+  const cards = data.cards as Record<string, unknown>[];
+  const penniCards = cards
+    .filter((card) => card.title === PENNI_CARD_TITLE)
+    .filter((card) => card.deleted !== true)
+    .sort((a, b) => {
+      const aTime = Date.parse(String(a.updatedAt ?? a.createdAt ?? ""));
+      const bTime = Date.parse(String(b.updatedAt ?? b.createdAt ?? ""));
+      return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+    });
+
+  const cardId = penniCards[0]?.cardId;
+  return typeof cardId === "string" && isCardId(cardId) ? cardId : null;
+}
+
+async function waitForPenniPigCardId(accessToken: string): Promise<string | null> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const cardId = await findPenniPigCardId(accessToken);
+    if (cardId) return cardId;
+    await sleep(2_000);
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // 9.2 — createOrUpdatePlaylist
 // ---------------------------------------------------------------------------
@@ -189,9 +237,9 @@ export async function createOrUpdatePlaylist(
   const payload = buildPlaylistPayload() as Record<string, unknown>;
 
   // Step 4: Call the Yoto Labs API (with retry).
-  const existingPlaylistId = conn?.playlistId ?? null;
+  const existingPlaylistId = isCardId(conn?.playlistId) ? conn.playlistId : null;
 
-  const returnedPlaylistId = await withRetry(async () => {
+  const returnedJob = await withRetry(async () => {
     const url = new URL(`${YOTO_LABS_API_URL}/content/job`);
     url.searchParams.set("voiceId", YOTO_LABS_VOICE_ID);
     const method = "POST";
@@ -219,22 +267,30 @@ export async function createOrUpdatePlaylist(
     const data = (await response.json()) as Record<string, unknown>;
     const job = data.job as Record<string, unknown> | undefined;
     const card = data.card as Record<string, unknown> | undefined;
-    const id = (card?.cardId ??
-      job?.cardId ??
-      job?.contentId ??
-      data.cardId ??
-      data.id ??
-      job?.jobId) as string | undefined;
+    const cardId = (card?.cardId ?? job?.cardId ?? data.cardId) as
+      | string
+      | undefined;
+    const jobId = (job?.jobId ?? data.jobId ?? data.id) as string | undefined;
 
-    if (!id) {
+    if (!cardId && !jobId) {
       throw new PlaylistApiError(
         `Yoto Labs API response missing jobId/cardId fields`,
         200
       );
     }
 
-    return id;
+    return { cardId: isCardId(cardId) ? cardId : null, jobId: jobId ?? null };
   });
+
+  const returnedPlaylistId =
+    returnedJob.cardId ?? (await waitForPenniPigCardId(accessToken));
+
+  if (!returnedPlaylistId) {
+    throw new PlaylistApiError(
+      "Yoto accepted the text-to-speech job, but the Penni Pig card is still being generated. Wait a minute, then check My Content in the Yoto app.",
+      202
+    );
+  }
 
   // Step 5: Persist success.
   upsertConnection({
