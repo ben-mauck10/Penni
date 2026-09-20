@@ -3,8 +3,8 @@
 These files provide the first simple Yoto card experience without requiring an
 external text-to-speech provider.
 
-- `update.aiff`
-- `changed.aiff`
-- `moment.aiff`
+- `update.wav`
+- `changed.wav`
+- `moment.wav`
 
-The older `.mp3` files are tiny placeholders and are not used by the playlist.
+The older `.mp3` and `.aiff` files are not used by the playlist.

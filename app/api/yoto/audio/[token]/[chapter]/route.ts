@@ -18,7 +18,7 @@ function isValidChapter(c: string): c is ValidChapter {
 
 // Standard headers applied to every audio response.
 const AUDIO_HEADERS = {
-  "Content-Type": "audio/aiff",
+  "Content-Type": "audio/wav",
   "Cache-Control": "private, no-store",
 };
 
@@ -31,9 +31,9 @@ function responseBody(buffer: Buffer): ArrayBuffer {
 }
 
 const STATIC_AUDIO_FILES: Record<ValidChapter, string> = {
-  update: "update.aiff",
-  changed: "changed.aiff",
-  moment: "moment.aiff",
+  update: "update.wav",
+  changed: "changed.wav",
+  moment: "moment.wav",
 };
 
 export async function GET(
