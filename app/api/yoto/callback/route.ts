@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { exchangeCode, isPendingFlowExpired } from "../../../../lib/yoto/oauth";
 import {
-  clearPendingOAuth,
+  clearPendingOAuthAsync,
   getFamilyId,
-  getConnection,
+  getConnectionAsync,
 } from "../../../../lib/yoto/db";
 
 export const runtime = "nodejs";
@@ -61,7 +61,7 @@ export async function GET(req: Request) {
 
   // Check if the pending flow has expired.
   const familyId = getFamilyId();
-  const conn = getConnection(familyId);
+  const conn = await getConnectionAsync(familyId);
 
   if (conn?.oauthState || conn?.oauthCodeVerifier) {
     if (
@@ -69,17 +69,17 @@ export async function GET(req: Request) {
       conn.oauthCodeVerifier !== pkce.codeVerifier ||
       conn.oauthState !== returnedState
     ) {
-      clearPendingOAuth(familyId, "not_connected");
+      await clearPendingOAuthAsync(familyId, "not_connected");
       return errorRedirect("state_mismatch", origin);
     }
   }
 
   if (conn && isPendingFlowExpired(conn)) {
-    clearPendingOAuth(familyId, "not_connected");
+    await clearPendingOAuthAsync(familyId, "not_connected");
     return errorRedirect("expired", origin);
   } else if (new Date(pkce.expiresAt).getTime() < Date.now()) {
     if (conn) {
-      clearPendingOAuth(familyId, "not_connected");
+      await clearPendingOAuthAsync(familyId, "not_connected");
     }
     return errorRedirect("expired", origin);
   }
@@ -93,11 +93,11 @@ export async function GET(req: Request) {
   try {
     await exchangeCode(code, pkce.codeVerifier, familyId, origin);
     if (conn) {
-      clearPendingOAuth(familyId);
+      await clearPendingOAuthAsync(familyId);
     }
   } catch (error) {
     if (conn) {
-      clearPendingOAuth(familyId, "not_connected");
+      await clearPendingOAuthAsync(familyId, "not_connected");
     }
     return errorRedirect(errorReason(error), origin);
   }

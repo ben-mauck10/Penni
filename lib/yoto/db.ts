@@ -1,9 +1,8 @@
-// Connection Store: SQLite-backed persistence for Yoto integration state.
-// Uses better-sqlite3 (synchronous API) — must only run in the Node.js runtime.
+// Connection Store: Turso/libSQL-backed persistence for Yoto integration state.
+// Uses @libsql/client (async HTTP) so it works on Vercel serverless.
+// Falls back to a local SQLite file when TURSO_DATABASE_URL is not set (dev).
 
-import fs from "fs";
-import path from "path";
-import DatabaseConstructor, { type Database } from "better-sqlite3";
+import { createClient, type Client } from "@libsql/client";
 import type { YotoConnection } from "./types";
 
 // Guard: this module cannot be used in the Next.js Edge runtime.
@@ -14,13 +13,30 @@ if (process.env.NEXT_RUNTIME === "edge") {
   );
 }
 
-const DB_PATH = process.env.YOTO_DB_PATH ?? "data/yoto.db";
+// ---------------------------------------------------------------------------
+// Client singleton
+// ---------------------------------------------------------------------------
 
-// Ensure the parent directory exists before opening the database file.
-fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+let client: Client | null = null;
 
-/** Singleton better-sqlite3 instance, lazily initialised on first call to getDb(). */
-let db: Database | null = null;
+function getClient(): Client {
+  if (client) return client;
+
+  const url = process.env.TURSO_DATABASE_URL ?? "file:data/yoto.db";
+  const authToken = process.env.TURSO_AUTH_TOKEN;
+
+  client = createClient(authToken ? { url, authToken } : { url });
+  return client;
+}
+
+// For backwards compatibility — callers that imported getDb() still work.
+export function getDb(): Client {
+  return getClient();
+}
+
+// ---------------------------------------------------------------------------
+// Schema
+// ---------------------------------------------------------------------------
 
 const CREATE_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS yoto_connections (
@@ -38,41 +54,30 @@ CREATE TABLE IF NOT EXISTS yoto_connections (
   oauth_expires_at         TEXT,
   presentation_state_json  TEXT,
   updated_at               TEXT NOT NULL
-);
+)
 `.trim();
 
-/**
- * Returns the singleton better-sqlite3 Database instance.
- * Creates the database file and schema on first call.
- */
-export function getDb(): Database {
-  if (db) return db;
+let schemaReady = false;
 
-  db = new DatabaseConstructor(DB_PATH);
-
-  // Enable WAL mode for better concurrent read performance.
-  db.pragma("journal_mode = WAL");
-
-  // Create table if it does not yet exist.
-  db.exec(CREATE_TABLE_SQL);
-  ensureColumn("presentation_state_json", "TEXT");
-
-  return db;
-}
-
-function ensureColumn(name: string, type: string): void {
-  const rows = db!.prepare("PRAGMA table_info(yoto_connections)").all() as {
-    name: string;
-  }[];
-  if (!rows.some((row) => row.name === name)) {
-    db!.exec(`ALTER TABLE yoto_connections ADD COLUMN ${name} ${type}`);
+async function ensureSchema(): Promise<void> {
+  if (schemaReady) return;
+  const c = getClient();
+  await c.execute(CREATE_TABLE_SQL);
+  // Add presentation_state_json column if missing (migration for existing DBs).
+  try {
+    await c.execute(
+      "ALTER TABLE yoto_connections ADD COLUMN presentation_state_json TEXT"
+    );
+  } catch {
+    // Column already exists — ignore.
   }
+  schemaReady = true;
 }
 
-/**
- * Maps a raw snake_case database row to the camelCase YotoConnection TypeScript type.
- * Used by the CRUD helpers in task 4.2.
- */
+// ---------------------------------------------------------------------------
+// Row mapper
+// ---------------------------------------------------------------------------
+
 export function rowToConnection(row: Record<string, unknown>): YotoConnection {
   return {
     familyId: row.family_id as string,
@@ -83,7 +88,7 @@ export function rowToConnection(row: Record<string, unknown>): YotoConnection {
     encryptedRefreshToken: (row.encrypted_refresh_token as string | null) ?? null,
     playlistId: (row.playlist_id as string | null) ?? null,
     mediaTokenHash: (row.media_token_hash as string | null) ?? null,
-    balanceMode: row.balance_mode as YotoConnection["balanceMode"],
+    balanceMode: (row.balance_mode as YotoConnection["balanceMode"]) ?? "hidden",
     oauthState: (row.oauth_state as string | null) ?? null,
     oauthCodeVerifier: (row.oauth_code_verifier as string | null) ?? null,
     oauthExpiresAt: (row.oauth_expires_at as string | null) ?? null,
@@ -92,184 +97,220 @@ export function rowToConnection(row: Record<string, unknown>): YotoConnection {
 }
 
 // ---------------------------------------------------------------------------
-// CRUD helpers (Task 4.2)
+// CRUD helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Inserts or updates a connection record for the given family.
- * Always sets updated_at to the current UTC ISO string.
- * Only the fields present in `conn` are written — existing fields are preserved
- * via the ON CONFLICT DO UPDATE clause (only supplied columns are touched).
- */
-export function upsertConnection(
+export async function upsertConnectionAsync(
   conn: Partial<YotoConnection> & { familyId: string }
-): void {
-  const db = getDb();
+): Promise<void> {
+  await ensureSchema();
+  const c = getClient();
   const now = new Date().toISOString();
 
-  // Build the full row, merging supplied fields over a zero-value default so
-  // that INSERT OR REPLACE doesn't wipe columns the caller didn't mention.
-  // We first attempt a SELECT to get the existing row (if any).
-  const existing = getConnection(conn.familyId);
+  const existing = await getConnectionAsync(conn.familyId);
 
   const merged: YotoConnection = {
     familyId: conn.familyId,
     yotoAccountId: conn.yotoAccountId ?? existing?.yotoAccountId ?? null,
     status: conn.status ?? existing?.status ?? "not_connected",
-    encryptedAccessToken:
-      conn.encryptedAccessToken ?? existing?.encryptedAccessToken ?? null,
-    accessTokenExpiresAt:
-      conn.accessTokenExpiresAt ?? existing?.accessTokenExpiresAt ?? null,
-    encryptedRefreshToken:
-      conn.encryptedRefreshToken ?? existing?.encryptedRefreshToken ?? null,
+    encryptedAccessToken: conn.encryptedAccessToken ?? existing?.encryptedAccessToken ?? null,
+    accessTokenExpiresAt: conn.accessTokenExpiresAt ?? existing?.accessTokenExpiresAt ?? null,
+    encryptedRefreshToken: conn.encryptedRefreshToken ?? existing?.encryptedRefreshToken ?? null,
     playlistId: conn.playlistId ?? existing?.playlistId ?? null,
     mediaTokenHash: conn.mediaTokenHash ?? existing?.mediaTokenHash ?? null,
     balanceMode: conn.balanceMode ?? existing?.balanceMode ?? "hidden",
     oauthState: conn.oauthState ?? existing?.oauthState ?? null,
-    oauthCodeVerifier:
-      conn.oauthCodeVerifier ?? existing?.oauthCodeVerifier ?? null,
+    oauthCodeVerifier: conn.oauthCodeVerifier ?? existing?.oauthCodeVerifier ?? null,
     oauthExpiresAt: conn.oauthExpiresAt ?? existing?.oauthExpiresAt ?? null,
     updatedAt: now,
   };
 
-  db.prepare(`
-    INSERT INTO yoto_connections (
-      family_id,
-      yoto_account_id,
-      status,
-      encrypted_access_token,
-      access_token_expires_at,
-      encrypted_refresh_token,
-      playlist_id,
-      media_token_hash,
-      balance_mode,
-      oauth_state,
-      oauth_code_verifier,
-      oauth_expires_at,
-      updated_at
-    ) VALUES (
-      @familyId,
-      @yotoAccountId,
-      @status,
-      @encryptedAccessToken,
-      @accessTokenExpiresAt,
-      @encryptedRefreshToken,
-      @playlistId,
-      @mediaTokenHash,
-      @balanceMode,
-      @oauthState,
-      @oauthCodeVerifier,
-      @oauthExpiresAt,
-      @updatedAt
-    )
-    ON CONFLICT(family_id) DO UPDATE SET
-      yoto_account_id          = excluded.yoto_account_id,
-      status                   = excluded.status,
-      encrypted_access_token   = excluded.encrypted_access_token,
-      access_token_expires_at  = excluded.access_token_expires_at,
-      encrypted_refresh_token  = excluded.encrypted_refresh_token,
-      playlist_id              = excluded.playlist_id,
-      media_token_hash         = excluded.media_token_hash,
-      balance_mode             = excluded.balance_mode,
-      oauth_state              = excluded.oauth_state,
-      oauth_code_verifier      = excluded.oauth_code_verifier,
-      oauth_expires_at         = excluded.oauth_expires_at,
-      updated_at               = excluded.updated_at
-  `).run({
-    familyId: merged.familyId,
-    yotoAccountId: merged.yotoAccountId,
-    status: merged.status,
-    encryptedAccessToken: merged.encryptedAccessToken,
-    accessTokenExpiresAt: merged.accessTokenExpiresAt,
-    encryptedRefreshToken: merged.encryptedRefreshToken,
-    playlistId: merged.playlistId,
-    mediaTokenHash: merged.mediaTokenHash,
-    balanceMode: merged.balanceMode,
-    oauthState: merged.oauthState,
-    oauthCodeVerifier: merged.oauthCodeVerifier,
-    oauthExpiresAt: merged.oauthExpiresAt,
-    updatedAt: merged.updatedAt,
+  await c.execute({
+    sql: `
+      INSERT INTO yoto_connections (
+        family_id, yoto_account_id, status,
+        encrypted_access_token, access_token_expires_at, encrypted_refresh_token,
+        playlist_id, media_token_hash, balance_mode,
+        oauth_state, oauth_code_verifier, oauth_expires_at, updated_at
+      ) VALUES (
+        $familyId, $yotoAccountId, $status,
+        $encryptedAccessToken, $accessTokenExpiresAt, $encryptedRefreshToken,
+        $playlistId, $mediaTokenHash, $balanceMode,
+        $oauthState, $oauthCodeVerifier, $oauthExpiresAt, $updatedAt
+      )
+      ON CONFLICT(family_id) DO UPDATE SET
+        yoto_account_id          = excluded.yoto_account_id,
+        status                   = excluded.status,
+        encrypted_access_token   = excluded.encrypted_access_token,
+        access_token_expires_at  = excluded.access_token_expires_at,
+        encrypted_refresh_token  = excluded.encrypted_refresh_token,
+        playlist_id              = excluded.playlist_id,
+        media_token_hash         = excluded.media_token_hash,
+        balance_mode             = excluded.balance_mode,
+        oauth_state              = excluded.oauth_state,
+        oauth_code_verifier      = excluded.oauth_code_verifier,
+        oauth_expires_at         = excluded.oauth_expires_at,
+        updated_at               = excluded.updated_at
+    `,
+    args: {
+      familyId: merged.familyId,
+      yotoAccountId: merged.yotoAccountId,
+      status: merged.status,
+      encryptedAccessToken: merged.encryptedAccessToken,
+      accessTokenExpiresAt: merged.accessTokenExpiresAt,
+      encryptedRefreshToken: merged.encryptedRefreshToken,
+      playlistId: merged.playlistId,
+      mediaTokenHash: merged.mediaTokenHash,
+      balanceMode: merged.balanceMode,
+      oauthState: merged.oauthState,
+      oauthCodeVerifier: merged.oauthCodeVerifier,
+      oauthExpiresAt: merged.oauthExpiresAt,
+      updatedAt: merged.updatedAt,
+    },
   });
 }
 
-export function savePresentationState(familyId: string, serializedState: string): void {
-  upsertConnection({ familyId });
-  getDb()
-    .prepare(
-      `UPDATE yoto_connections
-       SET presentation_state_json = ?, updated_at = ?
-       WHERE family_id = ?`
-    )
-    .run(serializedState, new Date().toISOString(), familyId);
+export async function getConnectionAsync(
+  familyId: string
+): Promise<YotoConnection | null> {
+  await ensureSchema();
+  const result = await getClient().execute({
+    sql: "SELECT * FROM yoto_connections WHERE family_id = $familyId",
+    args: { familyId },
+  });
+  if (result.rows.length === 0) return null;
+  return rowToConnection(result.rows[0] as unknown as Record<string, unknown>);
 }
 
-export function getPresentationStateJson(familyId: string): string | null {
-  const row = getDb()
-    .prepare(
-      "SELECT presentation_state_json FROM yoto_connections WHERE family_id = ?"
-    )
-    .get(familyId) as { presentation_state_json: string | null } | undefined;
-
-  return row?.presentation_state_json ?? null;
+export async function deleteConnectionAsync(familyId: string): Promise<void> {
+  await ensureSchema();
+  await getClient().execute({
+    sql: "DELETE FROM yoto_connections WHERE family_id = $familyId",
+    args: { familyId },
+  });
 }
 
-export function clearPendingOAuth(familyId: string, status?: YotoConnection["status"]): void {
+export async function clearPendingOAuthAsync(
+  familyId: string,
+  status?: YotoConnection["status"]
+): Promise<void> {
+  await ensureSchema();
   const now = new Date().toISOString();
   if (status) {
-    getDb()
-      .prepare(
-        `UPDATE yoto_connections
-         SET oauth_state = NULL,
-             oauth_code_verifier = NULL,
-             oauth_expires_at = NULL,
-             status = ?,
-             updated_at = ?
-         WHERE family_id = ?`
-      )
-      .run(status, now, familyId);
-    return;
+    await getClient().execute({
+      sql: `UPDATE yoto_connections
+            SET oauth_state = NULL, oauth_code_verifier = NULL,
+                oauth_expires_at = NULL, status = $status, updated_at = $now
+            WHERE family_id = $familyId`,
+      args: { status, now, familyId },
+    });
+  } else {
+    await getClient().execute({
+      sql: `UPDATE yoto_connections
+            SET oauth_state = NULL, oauth_code_verifier = NULL,
+                oauth_expires_at = NULL, updated_at = $now
+            WHERE family_id = $familyId`,
+      args: { now, familyId },
+    });
   }
-
-  getDb()
-    .prepare(
-      `UPDATE yoto_connections
-       SET oauth_state = NULL,
-           oauth_code_verifier = NULL,
-           oauth_expires_at = NULL,
-           updated_at = ?
-       WHERE family_id = ?`
-    )
-    .run(now, familyId);
 }
 
-/**
- * Returns the connection record for the given familyId, or null if not found.
- */
+export async function savePresentationStateAsync(
+  familyId: string,
+  serializedState: string
+): Promise<void> {
+  await upsertConnectionAsync({ familyId });
+  await getClient().execute({
+    sql: `UPDATE yoto_connections
+          SET presentation_state_json = $state, updated_at = $now
+          WHERE family_id = $familyId`,
+    args: { state: serializedState, now: new Date().toISOString(), familyId },
+  });
+}
+
+export async function getPresentationStateJsonAsync(
+  familyId: string
+): Promise<string | null> {
+  await ensureSchema();
+  const result = await getClient().execute({
+    sql: "SELECT presentation_state_json FROM yoto_connections WHERE family_id = $familyId",
+    args: { familyId },
+  });
+  if (result.rows.length === 0) return null;
+  return (result.rows[0].presentation_state_json as string | null) ?? null;
+}
+
+export async function getConnectionByMediaTokenHashAsync(
+  hash: string
+): Promise<YotoConnection | null> {
+  await ensureSchema();
+  const result = await getClient().execute({
+    sql: "SELECT * FROM yoto_connections WHERE media_token_hash = $hash",
+    args: { hash },
+  });
+  if (result.rows.length === 0) return null;
+  return rowToConnection(result.rows[0] as unknown as Record<string, unknown>);
+}
+
+// ---------------------------------------------------------------------------
+// Sync shims — kept so existing callers don't all need rewriting at once.
+// These throw if called; routes must be updated to use the async versions.
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use getConnectionAsync */
 export function getConnection(familyId: string): YotoConnection | null {
-  const db = getDb();
-  const row = db
-    .prepare("SELECT * FROM yoto_connections WHERE family_id = ?")
-    .get(familyId) as Record<string, unknown> | undefined;
-  return row ? rowToConnection(row) : null;
+  throw new Error(
+    `getConnection("${familyId}") called synchronously — use getConnectionAsync() instead.`
+  );
 }
 
-/**
- * Deletes the connection record for the given familyId.
- * No-op if the record does not exist.
- */
-export function deleteConnection(familyId: string): void {
-  const db = getDb();
-  db.prepare("DELETE FROM yoto_connections WHERE family_id = ?").run(familyId);
+/** @deprecated Use upsertConnectionAsync */
+export function upsertConnection(
+  _conn: Partial<YotoConnection> & { familyId: string }
+): void {
+  throw new Error(
+    "upsertConnection() called synchronously — use upsertConnectionAsync() instead."
+  );
+}
+
+/** @deprecated Use deleteConnectionAsync */
+export function deleteConnection(_familyId: string): void {
+  throw new Error(
+    "deleteConnection() called synchronously — use deleteConnectionAsync() instead."
+  );
+}
+
+/** @deprecated Use clearPendingOAuthAsync */
+export function clearPendingOAuth(
+  _familyId: string,
+  _status?: YotoConnection["status"]
+): void {
+  throw new Error(
+    "clearPendingOAuth() called synchronously — use clearPendingOAuthAsync() instead."
+  );
+}
+
+/** @deprecated Use savePresentationStateAsync */
+export function savePresentationState(
+  _familyId: string,
+  _serializedState: string
+): void {
+  throw new Error(
+    "savePresentationState() called synchronously — use savePresentationStateAsync() instead."
+  );
+}
+
+/** @deprecated Use getPresentationStateJsonAsync */
+export function getPresentationStateJson(_familyId: string): string | null {
+  throw new Error(
+    "getPresentationStateJson() called synchronously — use getPresentationStateJsonAsync() instead."
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Family ID helper (Task 4.3)
+// Family ID helper
 // ---------------------------------------------------------------------------
 
-/**
- * Returns the PENNI_FAMILY_ID environment variable.
- * Throws a clear error at startup if the variable is absent.
- */
 export function getFamilyId(): string {
   const id = process.env.PENNI_FAMILY_ID;
   if (!id) {

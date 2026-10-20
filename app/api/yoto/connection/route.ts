@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getFamilyId, getConnection } from "../../../../lib/yoto/db";
+import { getFamilyId, getConnectionAsync } from "../../../../lib/yoto/db";
 import { revokeTokens, ensureFreshToken } from "../../../../lib/yoto/oauth";
 
 export const runtime = "nodejs";
@@ -22,7 +22,7 @@ export async function DELETE(req: Request) {
 
   try {
     const familyId = getFamilyId();
-    const conn = getConnection(familyId);
+    const conn = await getConnectionAsync(familyId);
 
     if (conn && deletePlaylist === true && conn.playlistId) {
       // Attempt to delete the Yoto card via the API.

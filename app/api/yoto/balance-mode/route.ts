@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getFamilyId, getConnection, upsertConnection } from "../../../../lib/yoto/db";
+import { getFamilyId, getConnectionAsync, upsertConnectionAsync } from "../../../../lib/yoto/db";
 import { deriveStateForFamily } from "../../../../lib/yoto/presentation";
 import type { BalanceMode } from "../../../../lib/yoto/types";
 
@@ -31,12 +31,12 @@ export async function PUT(req: Request) {
 
   try {
     const familyId = getFamilyId();
-    upsertConnection({ familyId, balanceMode: balanceMode as BalanceMode });
+    await upsertConnectionAsync({ familyId, balanceMode: balanceMode as BalanceMode });
 
     // If a playlist exists, trigger re-derivation of presentation state.
-    const conn = getConnection(familyId);
+    const conn = await getConnectionAsync(familyId);
     if (conn?.playlistId) {
-      deriveStateForFamily(familyId);
+      await deriveStateForFamily(familyId);
     }
 
     return NextResponse.json({ ok: true, balanceMode }, { status: 200 });

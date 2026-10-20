@@ -11,11 +11,12 @@
     "test:coverage": "vitest --run --coverage"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
+    "@libsql/client": "^0.18.0",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/pngjs": "^6.0.5",
+    "better-sqlite3": "^13.0.3",
     "next": "16.2.3",
     "pngjs": "^7.0.0",
-    "@types/pngjs": "^6.0.5",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

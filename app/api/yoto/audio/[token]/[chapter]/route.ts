@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 import fs from "fs";
 import path from "path";
 import { hashToken, verifySignedMediaToken } from "@/lib/yoto/crypto";
-import { getDb } from "@/lib/yoto/db";
+import { getConnectionByMediaTokenHashAsync } from "@/lib/yoto/db";
 
 // The valid chapter keys this endpoint accepts.
 const VALID_CHAPTERS = ["update", "changed", "moment"] as const;
@@ -46,17 +46,14 @@ export async function GET(
 
   // Hash the token and look up the connection — never log the raw token.
   const hash = hashToken(token);
-  const db = getDb();
-  const row = db
-    .prepare("SELECT * FROM yoto_connections WHERE media_token_hash = ?")
-    .get(hash) as Record<string, unknown> | undefined;
+  const conn = await getConnectionByMediaTokenHashAsync(hash);
 
   // Validate the chapter parameter.
   if (!isValidChapter(chapter)) {
     return new Response(null, { status: 404, headers: PRIVATE_NO_STORE });
   }
 
-  const validMediaToken = row !== undefined || verifySignedMediaToken(token) !== null;
+  const validMediaToken = conn !== null || verifySignedMediaToken(token) !== null;
 
   if (!validMediaToken) {
     // Return 401 without body; no distinction between missing vs. invalid token.

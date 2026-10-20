@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { isPendingFlowExpired } from "../../../../lib/yoto/oauth";
 import {
-  clearPendingOAuth,
+  clearPendingOAuthAsync,
   getFamilyId,
-  getConnection,
+  getConnectionAsync,
 } from "../../../../lib/yoto/db";
 
 export const runtime = "nodejs";
@@ -33,7 +33,7 @@ function getStatusErrorMessage(error: unknown): string {
 export async function GET() {
   try {
     const familyId = getFamilyId();
-    const conn = getConnection(familyId);
+    const conn = await getConnectionAsync(familyId);
 
     if (!conn) {
       return NextResponse.json({
@@ -45,7 +45,7 @@ export async function GET() {
     }
 
     if (conn.status === "connecting" && isPendingFlowExpired(conn)) {
-      clearPendingOAuth(familyId, "not_connected");
+      await clearPendingOAuthAsync(familyId, "not_connected");
       return NextResponse.json({
         status: "not_connected",
         balanceMode: conn.balanceMode,

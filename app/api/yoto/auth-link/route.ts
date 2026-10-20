@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { buildAuthUrl } from "../../../../lib/yoto/oauth";
 import {
-  clearPendingOAuth,
-  getConnection,
+  clearPendingOAuthAsync,
+  getConnectionAsync,
   getFamilyId,
-  upsertConnection,
+  upsertConnectionAsync,
 } from "../../../../lib/yoto/db";
 
 export const runtime = "nodejs";
@@ -15,10 +15,10 @@ export async function GET(req: Request) {
   try {
     const origin = new URL(req.url).origin;
     const familyId = getFamilyId();
-    const existing = getConnection(familyId);
+    const existing = await getConnectionAsync(familyId);
 
     if (existing && existing.status === "connecting") {
-      clearPendingOAuth(familyId, "not_connected");
+      await clearPendingOAuthAsync(familyId, "not_connected");
     } else if (
       existing &&
       existing.status !== "not_connected" &&
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     const oauthExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     // Persist PKCE fields to the connection record.
-    upsertConnection({
+    await upsertConnectionAsync({
       familyId,
       status: "connecting",
       oauthState: state,

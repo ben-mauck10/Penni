@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getConnection, getFamilyId } from "@/lib/yoto/db";
+import { getConnectionAsync, getFamilyId } from "@/lib/yoto/db";
 import { ensureFreshToken } from "@/lib/yoto/oauth";
 
 export const runtime = "nodejs";
@@ -68,7 +68,7 @@ export async function GET(req: Request) {
   }
 
   const familyId = getFamilyId();
-  const conn = getConnection(familyId);
+  const conn = await getConnectionAsync(familyId);
 
   if (!conn?.playlistId) {
     return NextResponse.json(

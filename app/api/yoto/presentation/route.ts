@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getFamilyId, getConnection, savePresentationState } from "@/lib/yoto/db";
+import { getFamilyId, getConnectionAsync, savePresentationStateAsync } from "@/lib/yoto/db";
 import { deriveState, serializeState } from "@/lib/yoto/presentation";
 import type { PenniPlan, SaveGoal } from "@/lib/types";
 
@@ -91,12 +91,12 @@ export async function PUT(req: Request) {
 
   try {
     const familyId = getFamilyId();
-    const balanceMode = getConnection(familyId)?.balanceMode ?? "hidden";
+    const balanceMode = (await getConnectionAsync(familyId))?.balanceMode ?? "hidden";
     const state = deriveState(plan, balanceMode, {
       weeklyChangePence,
     });
 
-    savePresentationState(familyId, serializeState(state));
+    await savePresentationStateAsync(familyId, serializeState(state));
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
     console.error("[yoto/presentation] Failed to save presentation state", {

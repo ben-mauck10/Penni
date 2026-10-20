@@ -4,9 +4,9 @@
 
 import { generateSecureToken, buildPkceParams, encryptToken, decryptToken } from "./crypto";
 import {
-  getConnection,
-  upsertConnection,
-  deleteConnection,
+  getConnectionAsync,
+  upsertConnectionAsync,
+  deleteConnectionAsync,
 } from "./db";
 import type { YotoConnection, TokenPair } from "./types";
 
@@ -190,7 +190,7 @@ export async function exchangeCode(
 
   const yotoAccountId = data.account_id ?? data.sub ?? null;
 
-  upsertConnection({
+  await upsertConnectionAsync({
     familyId,
     yotoAccountId,
     status: "connected_no_playlist",
@@ -228,7 +228,7 @@ export async function exchangeCode(
  * @returns The new `TokenPair` on success.
  */
 export async function refreshTokens(familyId: string): Promise<TokenPair> {
-  const conn = getConnection(familyId);
+  const conn = await getConnectionAsync(familyId);
   if (!conn) {
     throw {
       errorType: "no_connection",
@@ -280,7 +280,7 @@ export async function refreshTokens(familyId: string): Promise<TokenPair> {
         continue;
       }
       // All attempts exhausted.
-      upsertConnection({ familyId, status: "needs_attention" });
+      await upsertConnectionAsync({ familyId, status: "needs_attention" });
       throw {
         errorType: "refresh_network_error",
         message:
@@ -291,7 +291,7 @@ export async function refreshTokens(familyId: string): Promise<TokenPair> {
 
     // 400/401 → revoked or expired token — do NOT retry.
     if (response.status === 400 || response.status === 401) {
-      upsertConnection({ familyId, status: "needs_attention" });
+      await upsertConnectionAsync({ familyId, status: "needs_attention" });
       throw {
         errorType: "refresh_token_invalid",
         message:
@@ -306,7 +306,7 @@ export async function refreshTokens(familyId: string): Promise<TokenPair> {
         await sleep(RETRY_DELAY_MS);
         continue;
       }
-      upsertConnection({ familyId, status: "needs_attention" });
+      await upsertConnectionAsync({ familyId, status: "needs_attention" });
       throw {
         errorType: "refresh_server_error",
         message:
@@ -317,7 +317,7 @@ export async function refreshTokens(familyId: string): Promise<TokenPair> {
 
     if (!response.ok) {
       // Unexpected non-success, non-5xx status — treat as non-retryable.
-      upsertConnection({ familyId, status: "needs_attention" });
+      await upsertConnectionAsync({ familyId, status: "needs_attention" });
       throw {
         errorType: "refresh_failed",
         message: `Token refresh failed (HTTP ${response.status}). Please reconnect your Yoto account.`,
@@ -333,7 +333,7 @@ export async function refreshTokens(familyId: string): Promise<TokenPair> {
     try {
       data = await response.json();
     } catch {
-      upsertConnection({ familyId, status: "needs_attention" });
+      await upsertConnectionAsync({ familyId, status: "needs_attention" });
       throw {
         errorType: "refresh_failed",
         message: "Malformed response from Yoto token endpoint.",
@@ -348,7 +348,7 @@ export async function refreshTokens(familyId: string): Promise<TokenPair> {
       ? encryptToken(data.refresh_token)
       : conn.encryptedRefreshToken;
 
-    upsertConnection({
+    await upsertConnectionAsync({
       familyId,
       encryptedAccessToken,
       encryptedRefreshToken,
@@ -381,7 +381,7 @@ export async function refreshTokens(familyId: string): Promise<TokenPair> {
  * @param familyId - The Penni family identifier.
  */
 export async function revokeTokens(familyId: string): Promise<void> {
-  const conn = getConnection(familyId);
+  const conn = await getConnectionAsync(familyId);
 
   if (conn?.encryptedAccessToken) {
     const correlationId = generateCorrelationId();
@@ -416,7 +416,7 @@ export async function revokeTokens(familyId: string): Promise<void> {
   }
 
   // Always remove the local record — this invalidates the mediaTokenHash.
-  deleteConnection(familyId);
+  await deleteConnectionAsync(familyId);
 }
 
 // ---------------------------------------------------------------------------
@@ -432,7 +432,7 @@ export async function revokeTokens(familyId: string): Promise<void> {
  * @throws If no connection record exists, or if the refresh fails.
  */
 export async function ensureFreshToken(familyId: string): Promise<string> {
-  const conn = getConnection(familyId);
+  const conn = await getConnectionAsync(familyId);
   if (!conn) {
     throw {
       errorType: "no_connection",

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getFamilyId, getConnection } from "../../../../lib/yoto/db";
+import { getFamilyId, getConnectionAsync } from "../../../../lib/yoto/db";
 import { createOrUpdatePlaylist } from "../../../../lib/yoto/playlist";
 
 export const runtime = "nodejs";
@@ -24,7 +24,7 @@ function playlistErrorMessage(error: unknown): string {
 export async function POST() {
   try {
     const familyId = getFamilyId();
-    const conn = getConnection(familyId);
+    const conn = await getConnectionAsync(familyId);
 
     if (
       !conn ||

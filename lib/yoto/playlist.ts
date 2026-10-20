@@ -14,7 +14,7 @@
 // that require an internet connection on the physical device.
 
 import { ensureFreshToken } from "./oauth";
-import { getConnection, upsertConnection } from "./db";
+import { getConnectionAsync, upsertConnectionAsync } from "./db";
 import { getTTSAdapter, getScriptForChapter } from "./tts";
 import type { YotoPresentationState } from "./types";
 
@@ -281,7 +281,7 @@ export async function createOrUpdatePlaylist(
   const accessToken = await ensureFreshToken(familyId);
 
   // Step 2: Read the existing connection record (for the cardId, if updating).
-  const conn = getConnection(familyId);
+  const conn = await getConnectionAsync(familyId);
   const existingCardId =
     typeof conn?.playlistId === "string" && /^[a-zA-Z0-9]{5}$/.test(conn.playlistId)
       ? conn.playlistId
@@ -346,7 +346,7 @@ export async function createOrUpdatePlaylist(
   });
 
   // Step 5: Persist success.
-  upsertConnection({
+  await upsertConnectionAsync({
     familyId,
     status: "playlist_ready",
     playlistId: cardId,

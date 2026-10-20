@@ -3,7 +3,7 @@
 
 import type { PenniPlan } from "../types";
 import type { BalanceMode, YotoPresentationState } from "./types";
-import { getConnection, getPresentationStateJson } from "./db";
+import { getConnectionAsync, getPresentationStateJsonAsync } from "./db";
 
 // ---------------------------------------------------------------------------
 // 6.1 — deriveState
@@ -104,11 +104,11 @@ export function deriveFallbackState(balanceMode: BalanceMode): YotoPresentationS
  *
  * Returns `null` if no plan is available (e.g. bank not yet linked).
  */
-export function deriveStateForFamily(familyId: string): YotoPresentationState | null {
+export async function deriveStateForFamily(familyId: string): Promise<YotoPresentationState | null> {
   const balanceMode: BalanceMode =
-    getConnection(familyId)?.balanceMode ?? "hidden";
+    (await getConnectionAsync(familyId))?.balanceMode ?? "hidden";
 
-  const serialized = getPresentationStateJson(familyId);
+  const serialized = await getPresentationStateJsonAsync(familyId);
   if (!serialized) {
     return deriveFallbackState(balanceMode);
   }
