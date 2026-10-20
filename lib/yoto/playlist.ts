@@ -181,9 +181,9 @@ export async function uploadAudioToYoto(
   });
 
   // Step 3: Poll until Yoto finishes transcoding.
-  // Up to 120 attempts × 5 s = 10 minutes max.
-  const MAX_POLL = 120;
-  const POLL_INTERVAL_MS = 5_000;
+  // Up to 20 attempts × 2 s = 40 seconds max.
+  const MAX_POLL = 20;
+  const POLL_INTERVAL_MS = 2_000;
 
   for (let attempt = 0; attempt < MAX_POLL; attempt++) {
     await sleep(POLL_INTERVAL_MS);
