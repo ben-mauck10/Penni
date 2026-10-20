@@ -87,6 +87,7 @@ export function buildAuthUrl(
     state,
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
+    prompt: "consent", // Force full re-auth so new scopes are granted
   });
 
   const url = `${authBase}/authorize?${params.toString()}`;
