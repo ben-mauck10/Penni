@@ -175,9 +175,11 @@ function ConnectingPanel() {
 
 function ConnectedNoPlaylistPanel({
   onCreatePlaylist,
+  onDisconnect,
   loading,
 }: {
   onCreatePlaylist: () => void;
+  onDisconnect: () => void;
   loading: boolean;
 }) {
   return (
@@ -186,7 +188,7 @@ function ConnectedNoPlaylistPanel({
       <p className="settings-desc">
         Yoto connected. Create a Penni Pig playlist to continue.
       </p>
-      <div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button
           type="button"
           className="settings-save-btn"
@@ -194,6 +196,28 @@ function ConnectedNoPlaylistPanel({
           disabled={loading}
         >
           {loading ? "Creating…" : "Create Penni playlist"}
+        </button>
+        <button
+          type="button"
+          onClick={onDisconnect}
+          disabled={loading}
+          style={{
+            display: "inline-flex",
+            minHeight: 46,
+            alignItems: "center",
+            justifyContent: "center",
+            border: "1px solid rgba(17,29,58,0.18)",
+            borderRadius: 8,
+            padding: "0 20px",
+            background: "#fff",
+            color: "var(--berry)",
+            fontFamily: "inherit",
+            fontSize: "1rem",
+            fontWeight: 900,
+            cursor: "pointer",
+          }}
+        >
+          Disconnect
         </button>
       </div>
     </div>
@@ -567,6 +591,7 @@ export default function YotoSettingsPage() {
           {status === "connected_no_playlist" && (
             <ConnectedNoPlaylistPanel
               onCreatePlaylist={handleCreatePlaylist}
+              onDisconnect={handleDisconnect}
               loading={loading}
             />
           )}
