@@ -176,13 +176,14 @@ export async function uploadAudioToYoto(
     return { uploadId, url };
   });
 
-  // Step 2: PUT the audio bytes to the signed URL (no auth header — S3 signed URL).
+  // Step 2: PUT the audio bytes to the signed S3 URL.
+  // No Authorization header — the signature is embedded in the URL itself.
+  // Sending Bearer auth to S3 causes a 403 "Invalid key=value pair" error.
   await withRetry(async () => {
     const res = await fetch(uploadUrlResponse.url, {
       method: "PUT",
       headers: {
         "Content-Type": "audio/mpeg",
-        "Content-Length": String(audioBuffer.byteLength),
       },
       body: new Uint8Array(audioBuffer),
     });

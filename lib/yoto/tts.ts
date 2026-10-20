@@ -122,7 +122,7 @@ export class ScriptedFallbackAdapter implements TTSAdapter {
     throw {
       errorType: "tts_provider_unconfigured",
       message:
-        "Set TTS_PROVIDER=elevenlabs and ELEVENLABS_API_KEY before serving Yoto audio.",
+        "Set TTS_PROVIDER=openai and OPENAI_API_KEY before serving Yoto audio.",
     };
   }
 }
