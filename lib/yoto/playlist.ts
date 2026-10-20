@@ -129,24 +129,21 @@ export async function synthesiseChapter(script: string): Promise<Buffer> {
  */
 export async function uploadAudioToYoto(
   accessToken: string,
-  audioBuffer: Buffer,
-  filename: string
+  audioBuffer: Buffer
 ): Promise<string> {
   // Step 1: Request a signed upload URL from Yoto.
   const { uploadId, uploadUrl } = await withRetry(async () => {
-    const res = await fetch(`${YOTO_API_URL}/uploads/request`, {
-      method: "POST",
+    const res = await fetch(`${YOTO_API_URL}/media/transcode/audio/uploadUrl`, {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ filename, contentType: "audio/mpeg" }),
     });
 
     if (!res.ok) {
       const text = await res.text().catch(() => "(unreadable)");
       throw new PlaylistApiError(
-        `Yoto /uploads/request failed (${res.status}): ${text}`,
+        `Yoto /media/transcode/audio/uploadUrl failed (${res.status}): ${text}`,
         res.status
       );
     }
@@ -157,7 +154,7 @@ export async function uploadAudioToYoto(
 
     if (typeof uploadId !== "string" || typeof uploadUrl !== "string") {
       throw new PlaylistApiError(
-        `Yoto /uploads/request response missing uploadId/uploadUrl: ${JSON.stringify(data)}`,
+        `Yoto /media/transcode/audio/uploadUrl response missing uploadId/uploadUrl: ${JSON.stringify(data)}`,
         200
       );
     }
@@ -191,7 +188,7 @@ export async function uploadAudioToYoto(
   for (let attempt = 0; attempt < MAX_POLL; attempt++) {
     await sleep(POLL_INTERVAL_MS);
 
-    const res = await fetch(`${YOTO_API_URL}/uploads/${uploadId}`, {
+    const res = await fetch(`${YOTO_API_URL}/media/upload/${uploadId}/transcoded?loudnorm=false`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
@@ -299,11 +296,7 @@ export async function createOrUpdatePlaylist(
       : FALLBACK_SCRIPTS[chapterType];
 
     const audioBuffer = await synthesiseChapter(script);
-    const hash = await uploadAudioToYoto(
-      accessToken,
-      audioBuffer,
-      `penni-${key}.mp3`
-    );
+    const hash = await uploadAudioToYoto(accessToken, audioBuffer);
     transcodedHashes[key] = hash;
   }
 
