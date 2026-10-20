@@ -12,7 +12,57 @@ export interface TTSAdapter {
 }
 
 // ---------------------------------------------------------------------------
-// 8.2 — ElevenLabsAdapter
+// 8.2 — OpenAIAdapter
+// ---------------------------------------------------------------------------
+
+export class OpenAIAdapter implements TTSAdapter {
+  private readonly apiKey: string;
+  private readonly voice: string;
+
+  constructor() {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY is not set");
+    }
+    this.apiKey = apiKey;
+    // Supported voices: alloy, ash, coral, echo, fable, onyx, nova, sage, shimmer
+    // "nova" is warm and child-friendly; override with OPENAI_TTS_VOICE env var.
+    this.voice = process.env.OPENAI_TTS_VOICE ?? "nova";
+  }
+
+  async synthesize(script: string): Promise<Buffer> {
+    const response = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "tts-1",
+        input: script,
+        voice: this.voice,
+        response_format: "mp3",
+      }),
+    });
+
+    if (!response.ok) {
+      let message: string;
+      try {
+        const body = await response.text();
+        message = `OpenAI TTS request failed: ${response.status} ${response.statusText} — ${body}`;
+      } catch {
+        message = `OpenAI TTS request failed: ${response.status} ${response.statusText}`;
+      }
+      throw { errorType: "tts_failed", message };
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8.3 — ElevenLabsAdapter (kept for reference / future use)
 // ---------------------------------------------------------------------------
 
 export class ElevenLabsAdapter implements TTSAdapter {
@@ -33,7 +83,7 @@ export class ElevenLabsAdapter implements TTSAdapter {
     const url = new URL(
       `https://api.elevenlabs.io/v1/text-to-speech/${this.voiceId}`
     );
-    url.searchParams.set("output_format", "mp3_22050_32");
+    url.searchParams.set("output_format", "mp3_44100_128");
 
     const response = await fetch(url.toString(), {
       method: "POST",
@@ -155,11 +205,19 @@ export function getScriptForChapter(
 // ---------------------------------------------------------------------------
 
 /**
- * Returns an `ElevenLabsAdapter` when `TTS_PROVIDER=elevenlabs` **and**
- * `ELEVENLABS_API_KEY` is set. Otherwise returns an adapter that raises a
- * clear configuration error instead of serving placeholder audio.
+ * Returns the configured TTS adapter based on the `TTS_PROVIDER` env var.
+ *
+ * Supported values:
+ *   - `openai`      — requires `OPENAI_API_KEY`
+ *   - `elevenlabs`  — requires `ELEVENLABS_API_KEY`
+ *
+ * Falls back to `ScriptedFallbackAdapter` (throws a clear config error) if
+ * neither provider is configured.
  */
 export function getTTSAdapter(): TTSAdapter {
+  if (process.env.TTS_PROVIDER === "openai" && process.env.OPENAI_API_KEY) {
+    return new OpenAIAdapter();
+  }
   if (
     process.env.TTS_PROVIDER === "elevenlabs" &&
     process.env.ELEVENLABS_API_KEY

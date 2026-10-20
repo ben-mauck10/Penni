@@ -1,19 +1,37 @@
-// Playlist Service: creates and updates the "Penni Pig" Yoto MYO content.
-// Uses Yoto Labs TTS so Yoto generates and hosts playable audio.
+// Playlist Service: creates and updates the "Penni Pig" Yoto MYO card.
+//
+// Audio pipeline (per chapter):
+//   1. Synthesise MP3 audio via ElevenLabs (mp3_44100_128, mono).
+//   2. SHA-256 hash the buffer (required by Yoto's upload-url endpoint).
+//   3. GET /media/audio/upload-url?sha256=<hex>&filename=<name> → { uploadId, url }.
+//   4. PUT the MP3 bytes to the signed S3 URL.
+//   5. Build the card payload with uploadId references.
+//   6. POST /content (create) or PUT /content/<cardId> (update).
+//
+// Using uploadId references means Yoto transcodes and stores the audio on its
+// own CDN, so the physical MYO card can download and play the tracks offline.
+// The previous approach used Yoto Labs TTS which produces streaming-only URLs
+// that require an internet connection on the physical device.
 
+import crypto from "crypto";
 import { ensureFreshToken } from "./oauth";
 import { getConnection, upsertConnection } from "./db";
+import { getTTSAdapter, getScriptForChapter } from "./tts";
+import type { YotoPresentationState } from "./types";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const YOTO_LABS_API_URL =
-  process.env.YOTO_LABS_API_URL ?? "https://labs.api.yotoplay.com";
-const YOTO_LABS_VOICE_ID =
-  process.env.YOTO_LABS_VOICE_ID ?? "JBFqnCBsd6RMkjVDRZzb";
 const YOTO_API_URL = process.env.YOTO_API_URL ?? "https://api.yotoplay.com";
 const PENNI_CARD_TITLE = "Penni Pig";
+
+/** Chapter definitions — order and keys are stable identifiers on the card. */
+const CHAPTERS = [
+  { key: "01-update", title: "My Penni update",      chapterType: "update"  as const },
+  { key: "02-changed", title: "What changed?",        chapterType: "changed" as const },
+  { key: "03-moment", title: "Family money moment",   chapterType: "moment"  as const },
+] satisfies { key: string; title: string; chapterType: "update" | "changed" | "moment" }[];
 
 /** Maximum number of attempts (initial try + 2 retries). */
 const MAX_ATTEMPTS = 3;
@@ -25,100 +43,17 @@ const INITIAL_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
 
 // ---------------------------------------------------------------------------
-// 9.1 — buildPlaylistPayload
-// ---------------------------------------------------------------------------
-
-/**
- * Constructs a Yoto Labs text-to-speech payload for the "Penni Pig" card.
- * The Labs API converts these text tracks into Yoto-hosted audio.
- */
-export function buildPlaylistPayload(): object {
-  const chapters = [
-    {
-      key: "01-update",
-      title: "My Penni update",
-      tracks: [
-        {
-          key: "01-update-track",
-          title: "My Penni update",
-          trackUrl:
-            "Hello from Penni Pig. Your savings update is ready. Keep going, you are doing brilliantly.",
-          type: "elevenlabs",
-          overlayLabel: "1",
-          display: {},
-        },
-      ],
-      display: {},
-    },
-    {
-      key: "02-changed",
-      title: "What changed?",
-      tracks: [
-        {
-          key: "02-changed-track",
-          title: "What changed?",
-          trackUrl:
-            "What changed this week? Your Penni Pig card is ready to help you talk about saving, spending, and giving.",
-          type: "elevenlabs",
-          overlayLabel: "2",
-          display: {},
-        },
-      ],
-      display: {},
-    },
-    {
-      key: "03-moment",
-      title: "Family money moment",
-      tracks: [
-        {
-          key: "03-moment-track",
-          title: "Family money moment",
-          trackUrl:
-            "Family money moment. Pick one thing you might save for, one thing you might spend on, and one kind thing you could give.",
-          type: "elevenlabs",
-          overlayLabel: "3",
-          display: {},
-        },
-      ],
-      display: {},
-    },
-  ];
-
-  return {
-    title: "Penni Pig",
-    content: {
-      chapters,
-      config: { resumeTimeout: 0 },
-      playbackType: "linear",
-    },
-    metadata: {
-      title: "Penni Pig",
-      description: "A child-friendly Penni Pig savings update.",
-      category: "activity",
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/** Returns true for errors that should trigger a retry (network / 5xx). */
-function isRetryable(err: unknown): boolean {
-  if (err instanceof PlaylistApiError) {
-    return err.statusCode >= 500;
-  }
-  // Non-PlaylistApiError means a network/fetch-level failure.
-  return true;
-}
 
 /** Waits for `ms` milliseconds. */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isCardId(value: string | null | undefined): value is string {
-  return /^[a-zA-Z0-9]{5}$/.test(value ?? "");
+/** SHA-256 hex digest of a buffer — required by the Yoto upload-url endpoint. */
+function sha256Hex(buf: Buffer): string {
+  return crypto.createHash("sha256").update(buf).digest("hex");
 }
 
 /**
@@ -135,10 +70,18 @@ class PlaylistApiError extends Error {
   }
 }
 
+/** Returns true for errors that should trigger a retry (network / 5xx). */
+function isRetryable(err: unknown): boolean {
+  if (err instanceof PlaylistApiError) {
+    return err.statusCode >= 500;
+  }
+  // Non-PlaylistApiError means a network/fetch-level failure.
+  return true;
+}
+
 /**
- * Calls the Yoto API with exponential back-off retry for network / 5xx errors.
- *
- * @param fn - Async function that performs one attempt and either resolves or throws.
+ * Calls an async operation with exponential back-off retry for network / 5xx
+ * errors.
  */
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   let lastError: unknown;
@@ -159,206 +102,261 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
     }
   }
 
-  // Should be unreachable, but satisfy the TypeScript control-flow analysis.
   throw lastError;
 }
 
-async function findPenniPigCardId(accessToken: string): Promise<string | null> {
-  const response = await fetch(`${YOTO_API_URL}/content/mine`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-    },
-  });
+// ---------------------------------------------------------------------------
+// 9.1 — synthesiseChapter
+// ---------------------------------------------------------------------------
 
-  if (!response.ok) {
-    return null;
-  }
-
-  const data = (await response.json()) as { cards?: unknown };
-  if (!Array.isArray(data.cards)) {
-    return null;
-  }
-
-  const cards = data.cards as Record<string, unknown>[];
-  const penniCards = cards
-    .filter((card) => card.title === PENNI_CARD_TITLE)
-    .filter((card) => card.deleted !== true)
-    .sort((a, b) => {
-      const aTime = Date.parse(String(a.updatedAt ?? a.createdAt ?? ""));
-      const bTime = Date.parse(String(b.updatedAt ?? b.createdAt ?? ""));
-      return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
-    });
-
-  const cardId = penniCards[0]?.cardId;
-  return typeof cardId === "string" && isCardId(cardId) ? cardId : null;
-}
-
-async function isCardAudioReady(
-  accessToken: string,
-  cardId: string
-): Promise<boolean | null> {
-  const response = await fetch(`${YOTO_API_URL}/content/${cardId}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const data = (await response.json()) as Record<string, unknown>;
-  const card = (data.card ?? data) as Record<string, unknown>;
-  const content = card.content as Record<string, unknown> | undefined;
-  const chapters = content?.chapters;
-  if (!Array.isArray(chapters) || chapters.length === 0) {
-    return false;
-  }
-
-  for (const chapter of chapters) {
-    if (typeof chapter !== "object" || chapter === null) {
-      return false;
-    }
-
-    const tracks = (chapter as Record<string, unknown>).tracks;
-    if (!Array.isArray(tracks) || tracks.length === 0) {
-      return false;
-    }
-
-    for (const track of tracks) {
-      if (typeof track !== "object" || track === null) {
-        return false;
-      }
-
-      const trackObj = track as Record<string, unknown>;
-      if (trackObj.type === "elevenlabs") {
-        return false;
-      }
-      if (typeof trackObj.trackUrl !== "string" || trackObj.trackUrl.length === 0) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-async function waitForPenniPigCardId(accessToken: string): Promise<string | null> {
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const cardId = await findPenniPigCardId(accessToken);
-    if (cardId) {
-      const audioReady = await isCardAudioReady(accessToken, cardId);
-      if (audioReady === true || audioReady === null) {
-        return cardId;
-      }
-    }
-    await sleep(2_000);
-  }
-
-  return null;
+/**
+ * Calls ElevenLabs to synthesise MP3 audio for a single chapter script.
+ * Returns the raw MP3 buffer.
+ */
+export async function synthesiseChapter(script: string): Promise<Buffer> {
+  const adapter = getTTSAdapter();
+  return adapter.synthesize(script);
 }
 
 // ---------------------------------------------------------------------------
-// 9.2 — createOrUpdatePlaylist
+// 9.2 — uploadAudioToYoto
+// ---------------------------------------------------------------------------
+
+/**
+ * Uploads an MP3 buffer to Yoto's media store.
+ *
+ * Steps:
+ *   1. POST /media/audio/upload-url to obtain a signed upload URL + uploadId.
+ *   2. PUT the buffer to the signed URL.
+ *
+ * @returns The Yoto `uploadId` string to use in the card payload.
+ */
+export async function uploadAudioToYoto(
+  accessToken: string,
+  audioBuffer: Buffer,
+  filename: string
+): Promise<string> {
+  const hash = sha256Hex(audioBuffer);
+
+  // Step 1: Get a signed upload URL from Yoto.
+  const uploadUrlResponse = await withRetry(async () => {
+    const params = new URLSearchParams({ sha256: hash, filename });
+    const res = await fetch(
+      `${YOTO_API_URL}/media/audio/upload-url?${params.toString()}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        // Some Yoto implementations want the hash in the body too
+        body: JSON.stringify({ sha256: hash, filename }),
+      }
+    );
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "(unreadable)");
+      throw new PlaylistApiError(
+        `Yoto upload-url request failed (${res.status}): ${text}`,
+        res.status
+      );
+    }
+
+    const data = (await res.json()) as Record<string, unknown>;
+    const uploadId = data.uploadId ?? data.upload_id ?? data.id;
+    const url = data.url ?? data.uploadUrl ?? data.signedUrl;
+
+    if (typeof uploadId !== "string" || typeof url !== "string") {
+      throw new PlaylistApiError(
+        `Yoto upload-url response missing uploadId/url fields: ${JSON.stringify(data)}`,
+        200
+      );
+    }
+
+    return { uploadId, url };
+  });
+
+  // Step 2: PUT the audio bytes to the signed URL (no auth header — S3 signed URL).
+  await withRetry(async () => {
+    const res = await fetch(uploadUrlResponse.url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Content-Length": String(audioBuffer.byteLength),
+      },
+      body: audioBuffer,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "(unreadable)");
+      throw new PlaylistApiError(
+        `Audio PUT to signed URL failed (${res.status}): ${text}`,
+        res.status
+      );
+    }
+  });
+
+  return uploadUrlResponse.uploadId;
+}
+
+// ---------------------------------------------------------------------------
+// 9.3 — buildCardPayload
+// ---------------------------------------------------------------------------
+
+/**
+ * Constructs the Yoto card payload using pre-uploaded chapter audio.
+ *
+ * @param uploadIds - Map from chapter key to its Yoto uploadId.
+ */
+export function buildCardPayload(
+  uploadIds: Record<string, string>
+): Record<string, unknown> {
+  const chapters = CHAPTERS.map(({ key, title }) => ({
+    key,
+    title,
+    tracks: [
+      {
+        key: `${key}-track`,
+        title,
+        format: "mp3",
+        channels: "mono",
+        uploadId: uploadIds[key],
+      },
+    ],
+    display: {},
+  }));
+
+  return {
+    title: PENNI_CARD_TITLE,
+    content: {
+      chapters,
+      config: { resumeTimeout: 0 },
+      playbackType: "linear",
+    },
+    metadata: {
+      title: PENNI_CARD_TITLE,
+      description: "A child-friendly Penni Pig savings update.",
+      category: "activity",
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 9.4 — createOrUpdatePlaylist
 // ---------------------------------------------------------------------------
 
 /**
  * Creates or updates the "Penni Pig" Yoto card for the given family.
  *
- * - Obtains a fresh access token via `ensureFreshToken`.
- * - POSTs text tracks to the Yoto Labs TTS job API.
- * - Includes `cardId` when updating existing content.
- * - Retries on network failures and 5xx responses with exponential back-off
- *   (initial 1 s, doubling each attempt, max 30 s, max 3 attempts total).
- * - On 4xx errors: throws `{ errorType: "playlist_api_error" }` without
- *   overwriting the existing `playlistId`.
+ * Flow:
+ *   1. Obtain a fresh access token.
+ *   2. For each of the three chapters, synthesise audio via ElevenLabs and
+ *      upload it to Yoto's media store.
+ *   3. Build the card payload with `uploadId` references.
+ *   4. POST /content (first-time create) or PUT /content/<cardId> (update).
+ *   5. Persist the returned cardId and set status to `playlist_ready`.
+ *
+ * Using `uploadId` references means Yoto hosts and transcodes the audio itself,
+ * so the physical MYO card can download the tracks for offline playback.
  *
  * @param familyId - Identifies this family's connection record.
- * @param origin   - The public base URL of this Penni deployment.
  * @returns `{ playlistId }` — the Yoto card ID stored in the Connection Store.
  */
 export async function createOrUpdatePlaylist(
-  familyId: string
+  familyId: string,
+  presentationState?: YotoPresentationState
 ): Promise<{ playlistId: string }> {
   // Step 1: Obtain a valid access token.
   const accessToken = await ensureFreshToken(familyId);
 
-  // Step 2: Read the current connection record.
+  // Step 2: Read the existing connection record (for the cardId, if updating).
   const conn = getConnection(familyId);
+  const existingCardId =
+    typeof conn?.playlistId === "string" && /^[a-zA-Z0-9]{5}$/.test(conn.playlistId)
+      ? conn.playlistId
+      : null;
 
-  // Step 3: Build the Yoto Labs TTS payload.
-  const payload = buildPlaylistPayload() as Record<string, unknown>;
+  // Step 3: Synthesise and upload audio for all three chapters.
+  const uploadIds: Record<string, string> = {};
 
-  // Step 4: Call the Yoto Labs API (with retry).
-  const existingPlaylistId = isCardId(conn?.playlistId) ? conn.playlistId : null;
+  for (const { key, chapterType } of CHAPTERS) {
+    const script = presentationState
+      ? getScriptForChapter(chapterType, presentationState)
+      : FALLBACK_SCRIPTS[chapterType];
 
-  const returnedJob = await withRetry(async () => {
-    const url = new URL(`${YOTO_LABS_API_URL}/content/job`);
-    url.searchParams.set("voiceId", YOTO_LABS_VOICE_ID);
-    const method = "POST";
-    const body = existingPlaylistId
-      ? { cardId: existingPlaylistId, ...payload }
-      : payload;
+    const audioBuffer = await synthesiseChapter(script);
+    const uploadId = await uploadAudioToYoto(
+      accessToken,
+      audioBuffer,
+      `penni-${key}.mp3`
+    );
+    uploadIds[key] = uploadId;
+  }
 
-    const response = await fetch(url.toString(), {
+  // Step 4: Create or update the Yoto card.
+  const payload = buildCardPayload(uploadIds);
+
+  const cardId = await withRetry(async () => {
+    const isUpdate = existingCardId !== null;
+    const url = isUpdate
+      ? `${YOTO_API_URL}/content/${existingCardId}`
+      : `${YOTO_API_URL}/content`;
+    const method = isUpdate ? "PUT" : "POST";
+
+    const res = await fetch(url, {
       method,
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(
+        isUpdate ? { cardId: existingCardId, ...payload } : payload
+      ),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "(unreadable body)");
+    if (!res.ok) {
+      const text = await res.text().catch(() => "(unreadable)");
       throw new PlaylistApiError(
-        `Yoto Labs API ${method} ${url.toString()} responded with ${response.status}: ${errorText}`,
-        response.status
+        `Yoto ${method} ${url} failed (${res.status}): ${text}`,
+        res.status
       );
     }
 
-    const data = (await response.json()) as Record<string, unknown>;
-    const job = data.job as Record<string, unknown> | undefined;
-    const card = data.card as Record<string, unknown> | undefined;
-    const cardId = (card?.cardId ?? job?.cardId ?? data.cardId) as
-      | string
-      | undefined;
-    const jobId = (job?.jobId ?? data.jobId ?? data.id) as string | undefined;
+    const data = (await res.json()) as Record<string, unknown>;
 
-    if (!cardId && !jobId) {
+    // Yoto may return the cardId at the top level or nested under `card`.
+    const card = data.card as Record<string, unknown> | undefined;
+    const returnedId = data.cardId ?? card?.cardId ?? existingCardId;
+
+    if (typeof returnedId !== "string" || !/^[a-zA-Z0-9]{5}$/.test(returnedId)) {
       throw new PlaylistApiError(
-        `Yoto Labs API response missing jobId/cardId fields`,
+        `Yoto card response missing or invalid cardId: ${JSON.stringify(data)}`,
         200
       );
     }
 
-    return { cardId: isCardId(cardId) ? cardId : null, jobId: jobId ?? null };
+    return returnedId;
   });
-
-  let returnedPlaylistId: string | null = null;
-  if (returnedJob.cardId) {
-    const audioReady = await isCardAudioReady(accessToken, returnedJob.cardId);
-    returnedPlaylistId = audioReady === true ? returnedJob.cardId : null;
-  }
-  returnedPlaylistId ??= await waitForPenniPigCardId(accessToken);
-
-  if (!returnedPlaylistId) {
-    throw new PlaylistApiError(
-      "Yoto accepted the text-to-speech job, but the Penni Pig card audio is still being generated. Wait a minute, then click Test / regenerate again before linking it to a MYO card.",
-      202
-    );
-  }
 
   // Step 5: Persist success.
   upsertConnection({
     familyId,
     status: "playlist_ready",
-    playlistId: returnedPlaylistId,
+    playlistId: cardId,
   });
 
-  return { playlistId: returnedPlaylistId };
+  return { playlistId: cardId };
 }
+
+// ---------------------------------------------------------------------------
+// Fallback scripts (used when no live presentation state is available)
+// ---------------------------------------------------------------------------
+
+const FALLBACK_SCRIPTS: Record<"update" | "changed" | "moment", string> = {
+  update:
+    "Hello from Penni Pig! Your savings update is ready. Keep going, you are doing brilliantly.",
+  changed:
+    "What changed this week? Your Penni Pig card is ready to help you talk about saving, spending, and giving.",
+  moment:
+    "Family money moment. Pick one thing you might save for, one thing you might spend on, and one kind thing you could give.",
+};
