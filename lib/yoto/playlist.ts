@@ -184,7 +184,7 @@ export async function uploadAudioToYoto(
         "Content-Type": "audio/mpeg",
         "Content-Length": String(audioBuffer.byteLength),
       },
-      body: audioBuffer,
+      body: new Uint8Array(audioBuffer),
     });
 
     if (!res.ok) {
