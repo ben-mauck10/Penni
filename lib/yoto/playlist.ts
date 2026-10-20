@@ -13,7 +13,6 @@
 // The previous approach used Yoto Labs TTS which produces streaming-only URLs
 // that require an internet connection on the physical device.
 
-import crypto from "crypto";
 import { ensureFreshToken } from "./oauth";
 import { getConnection, upsertConnection } from "./db";
 import { getTTSAdapter, getScriptForChapter } from "./tts";
@@ -51,10 +50,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** SHA-256 hex digest of a buffer — required by the Yoto upload-url endpoint. */
-function sha256Hex(buf: Buffer): string {
-  return crypto.createHash("sha256").update(buf).digest("hex");
-}
 
 /**
  * Structured error thrown for non-retryable Yoto API errors (4xx).
@@ -123,68 +118,59 @@ export async function synthesiseChapter(script: string): Promise<Buffer> {
 // ---------------------------------------------------------------------------
 
 /**
- * Uploads an MP3 buffer to Yoto's media store.
+ * Uploads an MP3 buffer to Yoto's media store and waits for transcoding.
  *
  * Steps:
- *   1. POST /media/audio/upload-url to obtain a signed upload URL + uploadId.
- *   2. PUT the buffer to the signed URL.
+ *   1. POST /uploads/request → { uploadId, uploadUrl }
+ *   2. PUT the MP3 bytes to the signed uploadUrl (no auth header — S3).
+ *   3. Poll GET /uploads/{uploadId} until transcodedSha256 is available.
  *
- * @returns The Yoto `uploadId` string to use in the card payload.
+ * @returns The `transcodedSha256` string used as `trackUrl: "yoto:#<hash>"`.
  */
 export async function uploadAudioToYoto(
   accessToken: string,
   audioBuffer: Buffer,
   filename: string
 ): Promise<string> {
-  const hash = sha256Hex(audioBuffer);
-
-  // Step 1: Get a signed upload URL from Yoto.
-  const uploadUrlResponse = await withRetry(async () => {
-    const params = new URLSearchParams({ sha256: hash, filename });
-    const res = await fetch(
-      `${YOTO_API_URL}/media/audio/upload-url?${params.toString()}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        // Some Yoto implementations want the hash in the body too
-        body: JSON.stringify({ sha256: hash, filename }),
-      }
-    );
+  // Step 1: Request a signed upload URL from Yoto.
+  const { uploadId, uploadUrl } = await withRetry(async () => {
+    const res = await fetch(`${YOTO_API_URL}/uploads/request`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ filename, contentType: "audio/mpeg" }),
+    });
 
     if (!res.ok) {
       const text = await res.text().catch(() => "(unreadable)");
       throw new PlaylistApiError(
-        `Yoto upload-url request failed (${res.status}): ${text}`,
+        `Yoto /uploads/request failed (${res.status}): ${text}`,
         res.status
       );
     }
 
     const data = (await res.json()) as Record<string, unknown>;
     const uploadId = data.uploadId ?? data.upload_id ?? data.id;
-    const url = data.url ?? data.uploadUrl ?? data.signedUrl;
+    const uploadUrl = data.uploadUrl ?? data.url ?? data.signedUrl;
 
-    if (typeof uploadId !== "string" || typeof url !== "string") {
+    if (typeof uploadId !== "string" || typeof uploadUrl !== "string") {
       throw new PlaylistApiError(
-        `Yoto upload-url response missing uploadId/url fields: ${JSON.stringify(data)}`,
+        `Yoto /uploads/request response missing uploadId/uploadUrl: ${JSON.stringify(data)}`,
         200
       );
     }
 
-    return { uploadId, url };
+    return { uploadId: uploadId as string, uploadUrl: uploadUrl as string };
   });
 
   // Step 2: PUT the audio bytes to the signed S3 URL.
   // No Authorization header — the signature is embedded in the URL itself.
-  // Sending Bearer auth to S3 causes a 403 "Invalid key=value pair" error.
   await withRetry(async () => {
-    const res = await fetch(uploadUrlResponse.url, {
+    const res = await fetch(uploadUrl, {
       method: "PUT",
-      headers: {
-        "Content-Type": "audio/mpeg",
-      },
+      headers: { "Content-Type": "audio/mpeg" },
       body: new Uint8Array(audioBuffer),
     });
 
@@ -197,7 +183,32 @@ export async function uploadAudioToYoto(
     }
   });
 
-  return uploadUrlResponse.uploadId;
+  // Step 3: Poll until Yoto finishes transcoding.
+  // Up to 120 attempts × 5 s = 10 minutes max.
+  const MAX_POLL = 120;
+  const POLL_INTERVAL_MS = 5_000;
+
+  for (let attempt = 0; attempt < MAX_POLL; attempt++) {
+    await sleep(POLL_INTERVAL_MS);
+
+    const res = await fetch(`${YOTO_API_URL}/uploads/${uploadId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) continue;
+
+    const data = (await res.json()) as Record<string, unknown>;
+    const hash = data.transcodedSha256 ?? data.sha256;
+
+    if (typeof hash === "string" && hash.length > 0) {
+      return hash;
+    }
+  }
+
+  throw new PlaylistApiError(
+    `Yoto transcoding timed out for upload ${uploadId} after ${MAX_POLL} attempts.`,
+    202
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -205,12 +216,12 @@ export async function uploadAudioToYoto(
 // ---------------------------------------------------------------------------
 
 /**
- * Constructs the Yoto card payload using pre-uploaded chapter audio.
+ * Constructs the Yoto card payload using transcoded audio hashes.
  *
- * @param uploadIds - Map from chapter key to its Yoto uploadId.
+ * @param transcodedHashes - Map from chapter key to Yoto transcodedSha256 hash.
  */
 export function buildCardPayload(
-  uploadIds: Record<string, string>
+  transcodedHashes: Record<string, string>
 ): Record<string, unknown> {
   const chapters = CHAPTERS.map(({ key, title }) => ({
     key,
@@ -221,7 +232,9 @@ export function buildCardPayload(
         title,
         format: "mp3",
         channels: "mono",
-        uploadId: uploadIds[key],
+        // "yoto:#<transcodedSha256>" tells Yoto to serve the uploaded audio.
+        // This is what allows the MYO card to download tracks for offline play.
+        trackUrl: `yoto:#${transcodedHashes[key]}`,
       },
     ],
     display: {},
@@ -278,7 +291,7 @@ export async function createOrUpdatePlaylist(
       : null;
 
   // Step 3: Synthesise and upload audio for all three chapters.
-  const uploadIds: Record<string, string> = {};
+  const transcodedHashes: Record<string, string> = {};
 
   for (const { key, chapterType } of CHAPTERS) {
     const script = presentationState
@@ -286,16 +299,16 @@ export async function createOrUpdatePlaylist(
       : FALLBACK_SCRIPTS[chapterType];
 
     const audioBuffer = await synthesiseChapter(script);
-    const uploadId = await uploadAudioToYoto(
+    const hash = await uploadAudioToYoto(
       accessToken,
       audioBuffer,
       `penni-${key}.mp3`
     );
-    uploadIds[key] = uploadId;
+    transcodedHashes[key] = hash;
   }
 
   // Step 4: Create or update the Yoto card.
-  const payload = buildCardPayload(uploadIds);
+  const payload = buildCardPayload(transcodedHashes);
 
   const cardId = await withRetry(async () => {
     const isUpdate = existingCardId !== null;

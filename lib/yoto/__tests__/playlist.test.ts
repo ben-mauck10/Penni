@@ -2,24 +2,20 @@ import { describe, expect, it } from "vitest";
 import { buildCardPayload } from "../playlist";
 
 describe("buildCardPayload", () => {
-  const uploadIds = {
-    "01-update": "abc01",
-    "02-changed": "abc02",
-    "03-moment": "abc03",
+  const hashes = {
+    "01-update": "abc01hash",
+    "02-changed": "abc02hash",
+    "03-moment": "abc03hash",
   };
 
   it("sets title to Penni Pig", () => {
-    const payload = buildCardPayload(uploadIds) as {
-      title: string;
-    };
+    const payload = buildCardPayload(hashes) as { title: string };
     expect(payload.title).toBe("Penni Pig");
   });
 
   it("produces three chapters with correct titles and keys", () => {
-    const payload = buildCardPayload(uploadIds) as {
-      content: {
-        chapters: { key: string; title: string }[];
-      };
+    const payload = buildCardPayload(hashes) as {
+      content: { chapters: { key: string; title: string }[] };
     };
     expect(payload.content.chapters.map((c) => c.title)).toEqual([
       "My Penni update",
@@ -33,16 +29,11 @@ describe("buildCardPayload", () => {
     ]);
   });
 
-  it("each chapter has exactly one track with an uploadId (not a trackUrl)", () => {
-    const payload = buildCardPayload(uploadIds) as {
+  it("each chapter has exactly one track with a yoto:# trackUrl (not an uploadId)", () => {
+    const payload = buildCardPayload(hashes) as {
       content: {
         chapters: {
-          tracks: {
-            uploadId?: string;
-            trackUrl?: string;
-            format: string;
-            channels: string;
-          }[];
+          tracks: { trackUrl?: string; uploadId?: unknown }[];
         }[];
       };
     };
@@ -50,28 +41,28 @@ describe("buildCardPayload", () => {
     for (const chapter of payload.content.chapters) {
       expect(chapter.tracks).toHaveLength(1);
       const track = chapter.tracks[0];
-      // uploadId must be present — this is what allows the MYO card to
-      // download audio for offline playback.
-      expect(track.uploadId).toBeDefined();
-      // trackUrl must NOT be present — that produces streaming-only cards.
-      expect(track.trackUrl).toBeUndefined();
+      // trackUrl must use the "yoto:#<hash>" scheme for uploaded audio.
+      expect(track.trackUrl).toMatch(/^yoto:#/);
+      // uploadId must NOT be present.
+      expect(track.uploadId).toBeUndefined();
     }
   });
 
-  it("maps uploadIds to the correct chapters", () => {
-    const payload = buildCardPayload(uploadIds) as {
+  it("maps transcodedSha256 hashes into yoto:# trackUrls correctly", () => {
+    const payload = buildCardPayload(hashes) as {
       content: {
-        chapters: { key: string; tracks: { uploadId: string }[] }[];
+        chapters: { key: string; tracks: { trackUrl: string }[] }[];
       };
     };
 
     for (const chapter of payload.content.chapters) {
-      expect(chapter.tracks[0].uploadId).toBe(uploadIds[chapter.key as keyof typeof uploadIds]);
+      const expectedHash = hashes[chapter.key as keyof typeof hashes];
+      expect(chapter.tracks[0].trackUrl).toBe(`yoto:#${expectedHash}`);
     }
   });
 
   it("sets format to mp3 and channels to mono on every track", () => {
-    const payload = buildCardPayload(uploadIds) as {
+    const payload = buildCardPayload(hashes) as {
       content: {
         chapters: { tracks: { format: string; channels: string }[] }[];
       };
